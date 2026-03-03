@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Rewards Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        .glass-card {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .sidebar-item:hover, .sidebar-item.active {
+            background: rgba(255,255,255,0.15);
+        }
+        .neu-shadow {
+            box-shadow: 8px 8px 16px rgba(0,0,0,0.1), -4px -4px 12px rgba(255,255,255,0.5);
+        }
+        .avatar-ring {
+            background: conic-gradient(from 0deg, #667eea, #764ba2, #f093fb, #667eea);
+            padding: 3px;
+            border-radius: 50%;
+        }
+        .modal-overlay {
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+        }
+        .negative-balance {
+            color: #ef4444 !important;
+        }
+    </style>
+</head>
+<body class="flex">
+
+    <aside class="w-64 min-h-screen bg-gradient-to-b from-indigo-900 to-purple-900 text-white p-6 flex flex-col fixed left-0 top-0 bottom-0 z-10">
+        <div class="flex items-center gap-3 mb-10">
+            <div class="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl flex items-center justify-center">
+                <i class="fas fa-star text-white"></i>
+            </div>
+            <h1 class="text-xl font-bold">FamilyRewards</h1>
+        </div>
+
+        <nav class="flex-1 space-y-2">
+            <div class="sidebar-item active flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200">
+                <i class="fas fa-home w-5 text-center"></i>
+                <span>Dashboard</span>
+            </div>
+            <div class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200">
+                <i class="fas fa-users w-5 text-center"></i>
+                <span>Children</span>
+            </div>
+            <div class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200">
+                <i class="fas fa-trophy w-5 text-center"></i>
+                <span>Awards</span>
+            </div>
+            <div class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200">
+                <i class="fas fa-tasks w-5 text-center"></i>
+                <span>Activities</span>
+            </div>
+            <div class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200">
+                <i class="fas fa-chart-line w-5 text-center"></i>
+                <span>History</span>
+            </div>
+            <div class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200">
+                <i class="fas fa-cog w-5 text-center"></i>
+                <span>Settings</span>
+            </div>
+        </nav>
+
+        <div class="mt-auto pt-6 border-t border-white/20">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 bg-indigo-600 rounded-full flex items-center justify-center">
+                    <i class="fas fa-user text-sm"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-semibold">Parent</p>
+                    <p class="text-xs text-indigo-300">Admin</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="ml-64 flex-1 p-8">
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h2 class="text-3xl font-bold text-white">Family Dashboard</h2>
+                <p class="text-indigo-200 mt-1">Manage rewards and track progress</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <button onclick="exportData()" class="px-5 py-2.5 bg-emerald-500 text-white font-semibold rounded-xl hover:bg-emerald-600 transition-all duration-200 shadow-lg flex items-center gap-2">
+                    <i class="fas fa-file-export"></i> Export
+                </button>
+                <button onclick="openAddChildModal()" class="px-5 py-2.5 bg-white text-indigo-700 font-semibold rounded-xl hover:bg-indigo-50 transition-all duration-200 shadow-lg flex items-center gap-2">
+                    <i class="fas fa-plus"></i> Add Child
+                </button>
+            </div>
+        </div>
+
+        <div id="childrenGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8"></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card rounded-2xl p-6 neu-shadow">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i class="fas fa-clock text-indigo-500"></i> Recent Activity
+                </h3>
+                <div id="activityList" class="space-y-3 max-h-96 overflow-y-auto">
+                    <p class="text-gray-400 text-center py-8">No activity yet. Add children and start tracking!</p>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-6 neu-shadow">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i class="fas fa-exchange-alt text-indigo-500"></i> Cash Out History
+                </h3>
+                <div id="cashOutHistory" class="space-y-3 max-h-96 overflow-y-auto">
+                    <p class="text-gray-400 text-center py-8">No cash outs yet.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="modalOverlay" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center hidden">
+        <div id="modalContent" class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all duration-300"></div>
+    </div>
+
+    <script>
+        var COLORS = ['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#feb47b', '#7f5af0', '#2cb67d'];
+        var AVATARS = ['😊', '🌟', '🦄', '🐱', '🦊', '🐸', '🦋', '🌈', '🎨', '🚀'];
+
+        function daysAgo(d) {
+            var date = new Date();
+            date.setDate(date.getDate() - d);
+            date.setHours(Math.floor(Math.random() * 12) + 7, Math.floor(Math.random() * 60), 0);
+            return date.toLocaleString();
+        }
+
+        var defaultChildren = [
+            { id: 1, name: 'Emma', avatar: '🌟', color: '#667eea', points: 115, totalEarned: 340, activities: [] },
+            { id: 2, name: 'Liam', avatar: '🚀', color: '#43e97b', points: 230, totalEarned: 580, activities: [] },
+            { id: 3, name: 'Sophie', avatar: '🦄', color: '#f093fb', points: 75, totalEarned: 200, activities: [] }
+        ];
+
+        var defaultActivityLog = [
+            { type: 'add', childName: 'Emma', amount: 25, description: 'Emma earned 25 points for Cleaned her room', time: daysAgo(28) },
+            { type: 'add', childName: 'Liam', amount: 50, description: 'Liam earned 50 points for Aced math test', time: daysAgo(27) },
+            { type: 'add', childName: 'Sophie', amount: 15, description: 'Sophie earned 15 points for Fed the dog', time: daysAgo(27) },
+            { type: 'remove', childName: 'Emma', amount: 10, description: 'Emma lost 10 points - Forgot to make bed', time: daysAgo(26) },
+            { type: 'add', childName: 'Emma', amount: 30, description: 'Emma earned 30 points for Helped with dinner', time: daysAgo(25) },
+            { type: 'add', childName: 'Liam', amount: 20, description: 'Liam earned 20 points for Took out the trash', time: daysAgo(25) },
+            { type: 'add', childName: 'Sophie', amount: 25, description: 'Sophie earned 25 points for Finished reading book', time: daysAgo(24) },
+            { type: 'cashout', childName: 'Liam', amount: 50, description: 'Liam cashed out 50 points ($5.00) - Bought a comic book', time: daysAgo(23) },
+            { type: 'add', childName: 'Emma', amount: 10, description: 'Emma earned 10 points for Set the table', time: daysAgo(22) },
+            { type: 'remove', childName: 'Sophie', amount: 5, description: 'Sophie lost 5 points - Left toys out', time: daysAgo(22) },
+            { type: 'add', childName: 'Liam', amount: 40, description: 'Liam earned 40 points for Mowed the lawn', time: daysAgo(21) },
+            { type: 'add', childName: 'Sophie', amount: 20, description: 'Sophie earned 20 points for Practiced piano', time: daysAgo(20) },
+            { type: 'add', childName: 'Emma', amount: 50, description: 'Emma earned 50 points for Great report card', time: daysAgo(19) },
+            { type: 'cashout', childName: 'Emma', amount: 75, description: 'Emma cashed out 75 points ($7.50) - Saved for toy', time: daysAgo(18) },
+            { type: 'add', childName: 'Liam', amount: 15, description: 'Liam earned 15 points for Walked the dog', time: daysAgo(18) },
+            { type: 'remove', childName: 'Liam', amount: 20, description: "Liam lost 20 points - Didn't finish homework", time: daysAgo(17) },
+            { type: 'add', childName: 'Sophie', amount: 35, description: 'Sophie earned 35 points for Cleaned the bathroom', time: daysAgo(16) },
+            { type: 'add', childName: 'Emma', amount: 20, description: 'Emma earned 20 points for Vacuumed living room', time: daysAgo(15) },
+            { type: 'add', childName: 'Liam', amount: 30, description: 'Liam earned 30 points for Organized garage', time: daysAgo(14) },
+            { type: 'cashout', childName: 'Sophie', amount: 40, description: 'Sophie cashed out 40 points ($4.00) - Stickers', time: daysAgo(13) },
+            { type: 'add', childName: 'Sophie', amount: 10, description: 'Sophie earned 10 points for Watered the plants', time: daysAgo(13) },
+            { type: 'add', childName: 'Emma', amount: 15, description: 'Emma earned 15 points for Folded laundry', time: daysAgo(12) },
+            { type: 'remove', childName: 'Emma', amount: 5, description: 'Emma lost 5 points - Screen time violation', time: daysAgo(11) },
+            { type: 'add', childName: 'Liam', amount: 100, description: 'Liam earned 100 points for Won science fair', time: daysAgo(10) },
+            { type: 'add', childName: 'Sophie', amount: 25, description: 'Sophie earned 25 points for Helped neighbor', time: daysAgo(9) },
+            { type: 'cashout', childName: 'Liam', amount: 80, description: 'Liam cashed out 80 points ($8.00) - Video game', time: daysAgo(8) },
+            { type: 'add', childName: 'Emma', amount: 40, description: 'Emma earned 40 points for Babysat little brother', time: daysAgo(7) },
+            { type: 'add', childName: 'Liam', amount: 25, description: 'Liam earned 25 points for Washed the car', time: daysAgo(6) },
+            { type: 'remove', childName: 'Sophie', amount: 10, description: 'Sophie lost 10 points - Arguing with sibling', time: daysAgo(6) },
+            { type: 'add', childName: 'Sophie', amount: 30, description: 'Sophie earned 30 points for Extra credit project', time: daysAgo(5) },
+            { type: 'add', childName: 'Emma', amount: 25, description: 'Emma earned 25 points for Cooked breakfast', time: daysAgo(4) },
+            { type: 'cashout', childName: 'Emma', amount: 50, description: 'Emma cashed out 50 points ($5.00) - Savings jar', time: daysAgo(3) },
+            { type: 'add', childName: 'Liam', amount: 35, description: 'Liam earned 35 points for Cleaned his room perfectly', time: daysAgo(3) },
+            { type: 'add', childName: 'Sophie', amount: 15, description: 'Sophie earned 15 points for Made her bed all week', time: daysAgo(2) },
+            { type: 'add', childName: 'Emma', amount: 10, description: 'Emma earned 10 points for Packed lunch', time: daysAgo(1) },
+            { type: 'add', childName: 'Liam', amount: 20, description: 'Liam earned 20 points for Helped with groceries', time: daysAgo(1) },
+            { type: 'add', childName: 'Sophie', amount: 10, description: 'Sophie earned 10 points for Brushed teeth without reminder', time: daysAgo(0) }
+        ];
+
+        var defaultCashOutLog = [
+            { childName: 'Liam', amount: 50, cashValue: '5.00', reason: 'Bought a comic book', time: daysAgo(23) },
+            { childName: 'Emma', amount: 75, cashValue: '7.50', reason: 'Saved for toy', time: daysAgo(18) },
+            { childName: 'Sophie', amount: 40, cashValue: '4.00', reason: 'Stickers', time: daysAgo(13) },
+            { childName: 'Liam', amount: 80, cashValue: '8.00', reason: 'Video game', time: daysAgo(8) },
+            { childName: 'Emma', amount: 50, cashValue: '5.00', reason: 'Savings jar', time: daysAgo(3) }
+        ];
+
+        var children, activityLog, cashOutLog, nextId;
+
+        function loadData() {
+            var saved = localStorage.getItem('familyRewards');
+            if (saved) {
+                try {
+                    var data = JSON.parse(saved);
+                    children = data.children || defaultChildren;
+                    activityLog = data.activityLog || defaultActivityLog;
+                    cashOutLog = data.cashOutLog || defaultCashOutLog;
+                    nextId = data.nextId || 4;
+                    return;
+                } catch (e) { /* fall through to defaults */ }
+            }
+            children = defaultChildren;
+            activityLog = defaultActivityLog;
+            cashOutLog = defaultCashOutLog;
+            nextId = 4;
+        }
+
+        function saveData() {
+            localStorage.setItem('familyRewards', JSON.stringify({
+                children: children,
+                activityLog: activityLog,
+                cashOutLog: cashOutLog,
+                nextId: nextId
+            }));
+        }
+
+        function renderChildren() {
+            var grid = document.getElementById('childrenGrid');
+            if (children.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-center py-16"><div class="text-6xl mb-4">👨‍👩‍👧‍👦</div><p class="text-white/80 text-lg">No children added yet. Click "Add Child" to get started!</p></div>';
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < children.length; i++) {
+                var child = children[i];
+                var balanceClass = child.points < 0 ? 'negative-balance' : '';
+                html += '<div class="glass-card rounded-2xl p-6 neu-shadow hover:scale-[1.02] transition-all duration-300">';
+                html += '<div class="flex items-center justify-between mb-4">';
+                html += '<div class="flex items-center gap-3">';
+                html += '<div class="avatar-ring">';
+                html += '<div class="w-14 h-14 rounded-full flex items-center justify-center text-2xl bg-white">';
+                html += child.avatar;
+                html += '</div></div>';
+                html += '<div>';
+                html += '<h3 class="text-lg font-bold text-gray-800">' + child.name + '</h3>';
+                html += '<p class="text-sm text-gray-500">Total earned: ' + child.totalEarned + ' pts</p>';
+                html += '</div></div>';
+                html += '<button onclick="removeChild(' + child.id + ')" class="text-gray-400 hover:text-red-500 transition-colors p-1" title="Remove child">';
+                html += '<i class="fas fa-trash-alt text-sm"></i></button>';
+                html += '</div>';
+                html += '<div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4 mb-4 text-center">';
+                html += '<p class="text-sm text-gray-500 mb-1">Current Balance</p>';
+                html += '<p class="text-4xl font-bold ' + balanceClass + '" style="color: ' + (child.points < 0 ? '#ef4444' : child.color) + '">' + child.points + '</p>';
+                html += '<p class="text-xs text-gray-400 mt-1">points</p>';
+                if (child.points < 0) {
+                    html += '<p class="text-xs text-red-400 mt-1 font-semibold">⚠ Negative balance</p>';
+                }
+                html += '</div>';
+                html += '<div class="flex gap-2">';
+                html += '<button onclick="openAddPointsModal(' + child.id + ')" class="flex-1 py-2.5 bg-gradient-to-r from-green-400 to-emerald-500 text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-1">';
+                html += '<i class="fas fa-plus text-xs"></i> Add</button>';
+                html += '<button onclick="openRemovePointsModal(' + child.id + ')" class="flex-1 py-2.5 bg-gradient-to-r from-orange-400 to-red-400 text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-1">';
+                html += '<i class="fas fa-minus text-xs"></i> Remove</button>';
+                html += '<button onclick="openCashOutModal(' + child.id + ')" class="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-1">';
+                html += '<i class="fas fa-money-bill-wave text-xs"></i> Cash Out</button>';
+                html += '</div></div>';
+            }
+            grid.innerHTML = html;
+        }
+
+        function renderActivity() {
+            var list = document.getElementById('activityList');
+            if (activityLog.length === 0) {
+                list.innerHTML = '<p class="text-gray-400 text-center py-8">No activity yet. Add children and start tracking!</p>';
+                return;
+            }
+            var items = activityLog.slice(-50).reverse();
+            var html = '';
+            for (var i = 0; i < items.length; i++) {
+                var a = items[i];
+                var icon = a.type === 'add' ? 'fa-arrow-up text-green-500' : a.type === 'remove' ? 'fa-arrow-down text-red-500' : 'fa-money-bill-wave text-indigo-500';
+                var bg = a.type === 'add' ? 'bg-green-50' : a.type === 'remove' ? 'bg-red-50' : 'bg-indigo-50';
+                var colorClass = a.type === 'add' ? 'text-green-600' : a.type === 'remove' ? 'text-red-500' : 'text-indigo-600';
+                var sign = a.type === 'add' ? '+' : '-';
+                html += '<div class="flex items-center gap-3 p-3 ' + bg + ' rounded-xl">';
+                html += '<div class="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm">';
+                html += '<i class="fas ' + icon + ' text-sm"></i></div>';
+                html += '<div class="flex-1">';
+                html += '<p class="text-sm font-medium text-gray-700">' + a.description + '</p>';
+                html += '<p class="text-xs text-gray-400">' + a.time + '</p>';
+                html += '</div>';
+                html += '<span class="text-sm font-bold ' + colorClass + '">' + sign + a.amount + ' pts</span>';
+                html += '</div>';
+            }
+            list.innerHTML = html;
+        }
+
+        function renderCashOutHistory() {
+            var list = document.getElementById('cashOutHistory');
+            if (cashOutLog.length === 0) {
+                list.innerHTML = '<p class="text-gray-400 text-center py-8">No cash outs yet.</p>';
+                return;
+            }
+            var items = cashOutLog.slice(-50).reverse();
+            var html = '';
+            for (var i = 0; i < items.length; i++) {
+                var c = items[i];
+                html += '<div class="flex items-center gap-3 p-3 bg-purple-50 rounded-xl">';
+                html += '<div class="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm">';
+                html += '<i class="fas fa-dollar-sign text-purple-500 text-sm"></i></div>';
+                html += '<div class="flex-1">';
+                html += '<p class="text-sm font-medium text-gray-700">' + c.childName + ' cashed out</p>';
+                html += '<p class="text-xs text-gray-400">' + c.time + (c.reason ? ' - ' + c.reason : '') + '</p>';
+                html += '</div>';
+                html += '<span class="text-sm font-bold text-purple-600">' + c.amount + ' pts ($' + (c.amount * 0.1).toFixed(2) + ')</span>';
+                html += '</div>';
+            }
+            list.innerHTML = html;
+        }
+
+        function showModal(html) {
+            document.getElementById('modalContent').innerHTML = html;
+            document.getElementById('modalOverlay').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.add('hidden');
+        }
+
+        function openAddChildModal() {
+            var avatarOptions = '';
+            for (var i = 0; i < AVATARS.length; i++) {
+                avatarOptions += '<button type="button" class="text-3xl p-2 rounded-lg hover:bg-indigo-100 transition-colors avatar-pick" data-avatar="' + AVATARS[i] + '" onclick="selectAvatar(this, \'' + AVATARS[i] + '\')">' + AVATARS[i] + '</button>';
+            }
+            showModal(
+                '<h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">' +
+                '<i class="fas fa-user-plus text-indigo-500"></i> Add New Child</h3>' +
+                '<div class="space-y-4">' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Name</label>' +
+                '<input id="childNameInput" type="text" placeholder="Enter child\'s name" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors"></div>' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-2">Choose Avatar</label>' +
+                '<div class="flex flex-wrap gap-1" id="avatarGrid">' + avatarOptions + '</div>' +
+                '<input type="hidden" id="selectedAvatar" value="😊"></div>' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Starting Points</label>' +
+                '<input id="startingPoints" type="number" value="0" min="0" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors"></div>' +
+                '<div class="flex gap-3 mt-6">' +
+                '<button onclick="closeModal()" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>' +
+                '<button onclick="addChild()" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200">Add Child</button>' +
+                '</div></div>'
+            );
+        }
+
+        function selectAvatar(el, avatar) {
+            var picks = document.querySelectorAll('.avatar-pick');
+            for (var i = 0; i < picks.length; i++) {
+                picks[i].classList.remove('bg-indigo-200', 'ring-2', 'ring-indigo-500');
+            }
+            el.classList.add('bg-indigo-200', 'ring-2', 'ring-indigo-500');
+            document.getElementById('selectedAvatar').value = avatar;
+        }
+
+        function addChild() {
+            var name = document.getElementById('childNameInput').value.trim();
+            if (!name) { alert('Please enter a name'); return; }
+            var avatar = document.getElementById('selectedAvatar').value;
+            var startPts = parseInt(document.getElementById('startingPoints').value) || 0;
+            var color = COLORS[children.length % COLORS.length];
+            children.push({ id: nextId++, name: name, avatar: avatar, color: color, points: startPts, totalEarned: startPts, activities: [] });
+            closeModal();
+            renderAll();
+            saveData();
+        }
+
+        function removeChild(id) {
+            if (confirm('Are you sure you want to remove this child?')) {
+                children = children.filter(function(c) { return c.id !== id; });
+                renderAll();
+                saveData();
+            }
+        }
+
+        function openAddPointsModal(childId) {
+            var child = children.find(function(c) { return c.id === childId; });
+            showModal(
+                '<h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">' +
+                '<i class="fas fa-plus-circle text-green-500"></i> Add Points for ' + child.name + '</h3>' +
+                '<div class="space-y-4">' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Points to Add</label>' +
+                '<input id="pointsInput" type="number" min="1" value="10" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none transition-colors text-center text-2xl font-bold"></div>' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Reason (optional)</label>' +
+                '<input id="reasonInput" type="text" placeholder="e.g. Cleaned room, Homework done" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none transition-colors"></div>' +
+                '<div class="flex flex-wrap gap-2">' +
+                '<button onclick="document.getElementById(\'pointsInput\').value=5" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors">+5</button>' +
+                '<button onclick="document.getElementById(\'pointsInput\').value=10" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors">+10</button>' +
+                '<button onclick="document.getElementById(\'pointsInput\').value=25" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors">+25</button>' +
+                '<button onclick="document.getElementById(\'pointsInput\').value=50" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors">+50</button>' +
+                '<button onclick="document.getElementById(\'pointsInput\').value=100" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors">+100</button>' +
+                '</div>' +
+                '<div class="flex gap-3 mt-6">' +
+                '<button onclick="closeModal()" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>' +
+                '<button onclick="doAddPoints(' + childId + ')" class="flex-1 py-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200">Add Points</button>' +
+                '</div></div>'
+            );
+        }
+
+        function doAddPoints(childId) {
+            var child = children.find(function(c) { return c.id === childId; });
+            var pts = parseInt(document.getElementById('pointsInput').value);
+            var reason = document.getElementById('reasonInput').value.trim();
+            if (!pts || pts <= 0) { alert('Enter a valid number of points'); return; }
+            child.points += pts;
+            child.totalEarned += pts;
+            activityLog.push({
+                type: 'add',
+                childName: child.name,
+                amount: pts,
+                description: child.name + ' earned ' + pts + ' points' + (reason ? ' for ' + reason : ''),
+                time: new Date().toLocaleString()
+            });
+            closeModal();
+            renderAll();
+            saveData();
+        }
+
+        function openRemovePointsModal(childId) {
+            var child = children.find(function(c) { return c.id === childId; });
+            showModal(
+                '<h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">' +
+                '<i class="fas fa-minus-circle text-red-500"></i> Remove Points from ' + child.name + '</h3>' +
+                '<p class="text-sm text-gray-500 mb-4">Current balance: <strong>' + child.points + ' pts</strong></p>' +
+                '<div class="space-y-4">' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Points to Remove</label>' +
+                '<input id="removePointsInput" type="number" min="1" value="5" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-red-500 focus:outline-none transition-colors text-center text-2xl font-bold"></div>' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Reason (optional)</label>' +
+                '<input id="removeReasonInput" type="text" placeholder="e.g. Misbehavior, Didn\'t do chores" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-red-500 focus:outline-none transition-colors"></div>' +
+                '<div class="flex gap-3 mt-6">' +
+                '<button onclick="closeModal()" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>' +
+                '<button onclick="doRemovePoints(' + childId + ')" class="flex-1 py-3 bg-gradient-to-r from-orange-400 to-red-400 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200">Remove Points</button>' +
+                '</div></div>'
+            );
+        }
+
+        function doRemovePoints(childId) {
+            var child = children.find(function(c) { return c.id === childId; });
+            var pts = parseInt(document.getElementById('removePointsInput').value);
+            var reason = document.getElementById('removeReasonInput').value.trim();
+            if (!pts || pts <= 0) { alert('Enter a valid number of points'); return; }
+            child.points -= pts;
+            activityLog.push({
+                type: 'remove',
+                childName: child.name,
+                amount: pts,
+                description: child.name + ' lost ' + pts + ' points' + (reason ? ' - ' + reason : ''),
+                time: new Date().toLocaleString()
+            });
+            closeModal();
+            renderAll();
+            saveData();
+        }
+
+        function openCashOutModal(childId) {
+            var child = children.find(function(c) { return c.id === childId; });
+            var defaultVal = child.points > 0 ? child.points : 0;
+            var cashVal = (defaultVal * 0.1).toFixed(2);
+            showModal(
+                '<h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">' +
+                '<i class="fas fa-money-bill-wave text-indigo-500"></i> Cash Out for ' + child.name + '</h3>' +
+                '<p class="text-sm text-gray-500 mb-4">Current balance: <strong>' + child.points + ' pts</strong> ($' + (child.points * 0.1).toFixed(2) + ')' +
+                (child.points < 0 ? ' <span class="text-red-500 font-semibold">(negative)</span>' : '') + '</p>' +
+                '<div class="space-y-4">' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Points to Cash Out</label>' +
+                '<input id="cashOutInput" type="number" min="1" value="' + defaultVal + '" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors text-center text-2xl font-bold" oninput="updateCashValue()"></div>' +
+                '<div class="bg-indigo-50 rounded-xl p-4 text-center">' +
+                '<p class="text-sm text-gray-500">Cash Value</p>' +
+                '<p class="text-3xl font-bold text-indigo-600" id="cashValue">$' + cashVal + '</p>' +
+                '<p class="text-xs text-gray-400 mt-1">1 point = $0.10</p></div>' +
+                '<div id="cashOutWarning" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">' +
+                '<p class="text-sm text-amber-700 font-medium">⚠ This will result in a negative balance</p></div>' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Note (optional)</label>' +
+                '<input id="cashOutReasonInput" type="text" placeholder="e.g. Birthday money, Allowance" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors"></div>' +
+                '<div class="flex gap-3 mt-6">' +
+                '<button onclick="closeModal()" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>' +
+                '<button onclick="doCashOut(' + childId + ')" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200">' +
+                '<i class="fas fa-check mr-1"></i> Cash Out</button>' +
+                '</div></div>'
+            );
+            window._cashOutChildId = childId;
+        }
+
+        function updateCashValue() {
+            var inp = document.getElementById('cashOutInput');
+            var display = document.getElementById('cashValue');
+            var warning = document.getElementById('cashOutWarning');
+            if (!inp || !display) return;
+            var v = parseInt(inp.value) || 0;
+            display.textContent = '$' + (v * 0.1).toFixed(2);
+            if (window._cashOutChildId) {
+                var child = children.find(function(c) { return c.id === window._cashOutChildId; });
+                if (child && warning) {
+                    if (v > child.points) {
+                        warning.classList.remove('hidden');
+                    } else {
+                        warning.classList.add('hidden');
+                    }
+                }
+            }
+        }
+
+        function doCashOut(childId) {
+            var child = children.find(function(c) { return c.id === childId; });
+            if (!child) { alert('Child not found'); return; }
+            var inputEl = document.getElementById('cashOutInput');
+            if (!inputEl) { alert('Input not found'); return; }
+            var pts = parseInt(inputEl.value);
+            if (isNaN(pts) || pts <= 0) { alert('Please enter a valid amount greater than 0'); return; }
+            var reasonEl = document.getElementById('cashOutReasonInput');
+            var reason = reasonEl ? reasonEl.value.trim() : '';
+            if (pts > child.points) {
+                if (!confirm(child.name + ' will go into negative balance (' + (child.points - pts) + ' pts). Continue?')) {
+                    return;
+                }
+            }
+            child.points = child.points - pts;
+            cashOutLog.push({
+                childName: child.name,
+                amount: pts,
+                cashValue: (pts * 0.1).toFixed(2),
+                reason: reason,
+                time: new Date().toLocaleString()
+            });
+            activityLog.push({
+                type: 'cashout',
+                childName: child.name,
+                amount: pts,
+                description: child.name + ' cashed out ' + pts + ' points ($' + (pts * 0.1).toFixed(2) + ')' + (reason ? ' - ' + reason : ''),
+                time: new Date().toLocaleString()
+            });
+            closeModal();
+            renderAll();
+            saveData();
+        }
+
+        function exportData() {
+            var data = [];
+            for (var i = 0; i < children.length; i++) {
+                var c = children[i];
+                data.push({ type: 'child', id: c.id, name: c.name, avatar: c.avatar, points: c.points, totalEarned: c.totalEarned, amount: '', cashValue: '', reason: '', time: '', description: '' });
+            }
+            for (var j = 0; j < activityLog.length; j++) {
+                var a = activityLog[j];
+                data.push({ type: 'activity_' + a.type, id: '', name: a.childName, avatar: '', points: '', totalEarned: '', amount: a.amount, cashValue: '', reason: '', time: a.time, description: a.description });
+            }
+            for (var k = 0; k < cashOutLog.length; k++) {
+                var cl = cashOutLog[k];
+                data.push({ type: 'cashout', id: '', name: cl.childName, avatar: '', points: '', totalEarned: '', amount: cl.amount, cashValue: cl.cashValue, reason: cl.reason, time: cl.time, description: '' });
+            }
+            if (data.length === 0) { alert('No data to export.'); return; }
+            var csv = Papa.unparse(data);
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'family_rewards_data.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            alert('Data exported successfully! ' + data.length + ' records saved.');
+        }
+
+        function renderAll() {
+            renderChildren();
+            renderActivity();
+            renderCashOutHistory();
+        }
+
+        document.getElementById('modalOverlay').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        loadData();
+        renderAll();
+    </script>
+</body>
+</html>
