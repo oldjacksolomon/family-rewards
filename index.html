@@ -295,10 +295,38 @@
             else                                          { showChildStep(2); }
         }
 
+        // ── Pure-JS SHA-256 fallback (for HTTP / local-IP access) ────────
+        function _sha256pure(str) {
+            function rr(v,a){ return (v>>>a)|(v<<(32-a)); }
+            var pw=Math.pow, mw=pw(2,32), h=[], k=[], pc=0, ic={}, res='', w=[], abl=str.length*8;
+            for(var c=2;pc<64;c++){if(!ic[c]){for(var ii=0;ii<313;ii+=c)ic[ii]=c;h[pc]=(pw(c,.5)*mw)|0;k[pc++]=(pw(c,1/3)*mw)|0;}}
+            str+='\x80'; while(str.length%64-56)str+='\x00';
+            for(var i=0;i<str.length;i++){var j=str.charCodeAt(i);w[i>>2]|=j<<((3-i%4)*8);}
+            w[w.length]=(abl/mw)|0; w[w.length]=abl;
+            var hs=h.slice();
+            for(var j2=0;j2<w.length;){
+                var ws=w.slice(j2,j2+=16), oh=hs.slice();
+                hs=hs.slice(0,8);
+                for(var i=0;i<64;i++){
+                    var w15=ws[i-15],w2=ws[i-2],a=hs[0],e=hs[4];
+                    var t1=hs[7]+(rr(e,6)^rr(e,11)^rr(e,25))+((e&hs[5])^(~e&hs[6]))+k[i]+
+                        (ws[i]=i<16?ws[i]:(ws[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+ws[i-7]+(rr(w2,17)^rr(w2,19)^(w2>>>10)))|0);
+                    var t2=(rr(a,2)^rr(a,13)^rr(a,22))+((a&hs[1])^(a&hs[2])^(hs[1]&hs[2]));
+                    hs=[(t1+t2)|0].concat(hs); hs[4]=(hs[4]+t1)|0; hs.length=8;
+                }
+                hs=hs.map(function(v,i){return (v+oh[i])|0;});
+            }
+            hs.forEach(function(hv){for(var i=3;i>=0;i--){res+=('0'+((hv>>>(i*8))&255).toString(16)).slice(-2);}});
+            return res;
+        }
+
         // ── Utilities ─────────────────────────────────────────────────
         async function sha256(str) {
-            var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-            return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2,'0'); }).join('');
+            if (window.crypto && window.crypto.subtle) {
+                var buf = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+                return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2,'0'); }).join('');
+            }
+            return _sha256pure(str);
         }
 
         function generateFamilyCode(name) {
