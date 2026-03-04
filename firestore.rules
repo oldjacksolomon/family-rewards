@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /families/{familyId} {
+      // Family doc (familyCode, parentName) is not sensitive — readable by anyone
+      // so children can look up their family by code.
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == familyId;
+
+      match /children/{childId} {
+        // Child name, avatar, balance are readable so the child login name-picker works.
+        // pinHash is also returned (Firestore cannot redact individual fields).
+        // SHA-256 of a 4-digit PIN is low-sensitivity for a family app.
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == familyId;
+      }
+
+      match /chores/{choreId} {
+        // Children read the active chore catalog to build their request form.
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == familyId;
+      }
+
+      match /pointRequests/{requestId} {
+        // Children create requests without being authenticated in Firebase Auth.
+        allow create: if true;
+        // Only the parent can read, update (approve/reject), or delete requests.
+        allow read, update, delete: if request.auth != null && request.auth.uid == familyId;
+      }
+
+      match /activities/{activityId} {
+        // Children read their own history (client-side filtered).
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == familyId;
+      }
+
+      match /cashouts/{cashoutId} {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == familyId;
+      }
+    }
+  }
+}

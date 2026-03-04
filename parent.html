@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FamilyRewards — Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        .glass-card {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .sidebar-item:hover, .sidebar-item.active { background: rgba(255,255,255,0.15); }
+        .neu-shadow { box-shadow: 8px 8px 16px rgba(0,0,0,0.1), -4px -4px 12px rgba(255,255,255,0.5); }
+        .avatar-ring {
+            background: conic-gradient(from 0deg, #667eea, #764ba2, #f093fb, #667eea);
+            padding: 3px; border-radius: 50%;
+        }
+        .modal-overlay { background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        .negative-balance { color: #ef4444 !important; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .toggle-switch {
+            width: 40px; height: 22px;
+            background: #d1d5db; border-radius: 11px;
+            position: relative; cursor: pointer; transition: background 0.2s;
+        }
+        .toggle-switch.on { background: #10b981; }
+        .toggle-switch::after {
+            content: ''; position: absolute;
+            width: 18px; height: 18px; border-radius: 50%;
+            background: white; top: 2px; left: 2px;
+            transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .toggle-switch.on::after { transform: translateX(18px); }
+        .pin-box {
+            width: 48px; height: 48px; text-align: center;
+            font-size: 20px; font-weight: bold;
+            border: 2px solid #e5e7eb; border-radius: 10px;
+            outline: none; transition: border-color 0.2s;
+        }
+        .pin-box:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+        .avatar-pick { transition: all 0.15s; }
+        .chore-card-sel { box-shadow: 0 0 0 3px #667eea !important; }
+    </style>
+</head>
+<body class="flex">
+
+    <!-- ── Sidebar ─────────────────────────────────────────────────── -->
+    <aside class="w-64 min-h-screen bg-gradient-to-b from-indigo-900 to-purple-900 text-white p-6 flex flex-col fixed left-0 top-0 bottom-0 z-10">
+        <div class="flex items-center gap-3 mb-10">
+            <div class="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl flex items-center justify-center">
+                <i class="fas fa-star text-white"></i>
+            </div>
+            <h1 class="text-xl font-bold">FamilyRewards</h1>
+        </div>
+
+        <nav class="flex-1 space-y-1">
+            <div class="sidebar-item active flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200" onclick="showPanel('dashboard')" data-panel="dashboard">
+                <i class="fas fa-home w-5 text-center"></i><span>Dashboard</span>
+            </div>
+            <div class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200" onclick="showPanel('requests')" data-panel="requests">
+                <i class="fas fa-bell w-5 text-center"></i><span>Requests</span>
+                <span id="requests-badge" class="hidden ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full"></span>
+            </div>
+            <div class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200" onclick="showPanel('catalog')" data-panel="catalog">
+                <i class="fas fa-tasks w-5 text-center"></i><span>Chore Catalog</span>
+            </div>
+            <div class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200" onclick="showPanel('history')" data-panel="history">
+                <i class="fas fa-chart-line w-5 text-center"></i><span>Full History</span>
+            </div>
+            <div class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200" onclick="showPanel('settings')" data-panel="settings">
+                <i class="fas fa-cog w-5 text-center"></i><span>Settings</span>
+            </div>
+        </nav>
+
+        <div class="mt-auto pt-6 border-t border-white/20">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 bg-indigo-600 rounded-full flex items-center justify-center">
+                    <i class="fas fa-user text-sm"></i>
+                </div>
+                <div>
+                    <p id="sidebar-parent-name" class="text-sm font-semibold">Parent</p>
+                    <p class="text-xs text-indigo-300">Admin</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ── Main ────────────────────────────────────────────────────── -->
+    <main class="ml-64 flex-1 p-8">
+
+        <!-- ── Panel: Dashboard ──────────────────────────────────── -->
+        <div id="panel-dashboard" class="panel active">
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h2 class="text-3xl font-bold text-white"><span id="dashboard-family-name">Family</span> Family Dashboard</h2>
+                    <p class="text-indigo-200 mt-1">Manage rewards and track progress</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button onclick="exportData()" class="px-5 py-2.5 bg-emerald-500 text-white font-semibold rounded-xl hover:bg-emerald-600 transition-all duration-200 shadow-lg flex items-center gap-2">
+                        <i class="fas fa-file-export"></i> Export
+                    </button>
+                    <button onclick="openAddChildModal()" class="px-5 py-2.5 bg-white text-indigo-700 font-semibold rounded-xl hover:bg-indigo-50 transition-all duration-200 shadow-lg flex items-center gap-2">
+                        <i class="fas fa-plus"></i> Add Child
+                    </button>
+                </div>
+            </div>
+
+            <div id="childrenGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8"></div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="glass-card rounded-2xl p-6 neu-shadow">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <i class="fas fa-clock text-indigo-500"></i> Recent Activity
+                    </h3>
+                    <div id="activityList" class="space-y-3 max-h-96 overflow-y-auto">
+                        <p class="text-gray-400 text-center py-8">No activity yet.</p>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl p-6 neu-shadow">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <i class="fas fa-exchange-alt text-indigo-500"></i> Cash Out History
+                    </h3>
+                    <div id="cashOutHistory" class="space-y-3 max-h-96 overflow-y-auto">
+                        <p class="text-gray-400 text-center py-8">No cash outs yet.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Panel: Requests ───────────────────────────────────── -->
+        <div id="panel-requests" class="panel">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-white">Point Requests</h2>
+                <p class="text-indigo-200 mt-1">Review and approve your kids' requests</p>
+            </div>
+            <div class="glass-card rounded-2xl p-6 neu-shadow">
+                <div id="requestsList">
+                    <p class="text-gray-400 text-center py-12">No pending requests — you're all caught up!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Panel: Catalog ────────────────────────────────────── -->
+        <div id="panel-catalog" class="panel">
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h2 class="text-3xl font-bold text-white">Chore Catalog</h2>
+                    <p class="text-indigo-200 mt-1">Define tasks and their point values</p>
+                </div>
+                <button onclick="openAddChoreModal()" class="px-5 py-2.5 bg-white text-indigo-700 font-semibold rounded-xl hover:bg-indigo-50 transition-all duration-200 shadow-lg flex items-center gap-2">
+                    <i class="fas fa-plus"></i> Add Chore
+                </button>
+            </div>
+            <div class="glass-card rounded-2xl p-6 neu-shadow">
+                <div id="choreList">
+                    <p class="text-gray-400 text-center py-12">No chores yet. Add some so your kids can request points!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Panel: History ────────────────────────────────────── -->
+        <div id="panel-history" class="panel">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-white">Full History</h2>
+                <p class="text-indigo-200 mt-1">Complete activity log for all family members</p>
+            </div>
+            <div class="glass-card rounded-2xl p-6 neu-shadow">
+                <div id="fullHistoryList" class="space-y-3 max-h-[70vh] overflow-y-auto">
+                    <p class="text-gray-400 text-center py-12">No activity yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Panel: Settings ───────────────────────────────────── -->
+        <div id="panel-settings" class="panel">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-white">Settings</h2>
+                <p class="text-indigo-200 mt-1">Family account settings</p>
+            </div>
+            <div class="space-y-6 max-w-lg">
+                <div class="glass-card rounded-2xl p-6 neu-shadow">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <i class="fas fa-key text-indigo-500"></i> Family Code
+                    </h3>
+                    <p class="text-sm text-gray-500 mb-3">Share this code with your children so they can log in.</p>
+                    <div class="flex items-center gap-3">
+                        <div class="flex-1 bg-indigo-50 border-2 border-indigo-200 rounded-xl px-5 py-3 text-center">
+                            <p id="family-code-display" class="text-3xl font-bold tracking-widest text-indigo-700">—</p>
+                        </div>
+                        <button onclick="copyFamilyCode()" class="px-4 py-3 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-xl transition-colors flex items-center gap-2 font-medium" title="Copy">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                    </div>
+                    <p id="copy-confirmation" class="hidden text-emerald-600 text-sm mt-2 text-center font-medium">Copied to clipboard!</p>
+                </div>
+
+                <div class="glass-card rounded-2xl p-6 neu-shadow">
+                    <h3 class="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2">
+                        <i class="fas fa-home text-indigo-500"></i> Family Name
+                    </h3>
+                    <p class="text-sm text-gray-500 mb-3">Shown on the dashboard header.</p>
+                    <div class="flex gap-3">
+                        <input id="family-name-input" type="text" placeholder="e.g. Grimm" class="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors font-semibold text-gray-700">
+                        <button onclick="saveFamilyName()" class="px-4 py-2.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-semibold rounded-xl transition-colors">Save</button>
+                    </div>
+                    <p id="family-name-saved" class="hidden text-emerald-600 text-sm mt-2 font-medium">Saved!</p>
+                </div>
+
+                <div class="glass-card rounded-2xl p-6 neu-shadow">
+                    <h3 class="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
+                        <i class="fas fa-user text-indigo-500"></i> Account
+                    </h3>
+                    <p class="text-gray-600"><span id="settings-parent-name" class="font-semibold"></span></p>
+                    <p class="text-gray-400 text-sm" id="settings-parent-email"></p>
+                    <button onclick="doSignOut()" class="mt-4 px-5 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 font-semibold rounded-xl transition-colors flex items-center gap-2">
+                        <i class="fas fa-sign-out-alt"></i> Sign Out
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ── Modal overlay ──────────────────────────────────────────── -->
+    <div id="modalOverlay" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center hidden">
+        <div id="modalContent" class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto transform transition-all duration-300"></div>
+    </div>
+
+    <script>window._configMissing = false;</script>
+    <script src="firebase-config.js" onerror="window._configMissing=true"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <script>
+        // ── Constants ─────────────────────────────────────────────────
+        var COLORS  = ['#667eea','#f093fb','#4facfe','#43e97b','#fa709a','#feb47b','#7f5af0','#2cb67d'];
+        var EMOJI_CATEGORIES = [
+            { label: 'Faces',   icon: '😊', emojis: ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🥰','😍','🤩','😘','😙','😋','😛','😜','🤪','🤑','🤗','😤','😡','😠','😎','🥳','🤓','🥸','😏','😴','🤒','😰','😱','🤯','😳','🫡','😶','🤭','🤫','🤔'] },
+            { label: 'Animals', icon: '🐶', emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🦆','🦅','🦉','🦇','🐺','🐴','🦄','🦋','🐢','🐬','🦈','🐙','🐲','🐝','🐞','🦩','🦚','🦜','🐿️','🦔','🐊','🐘'] },
+            { label: 'Nature',  icon: '🌸', emojis: ['🌸','🌺','🌻','🌹','🌷','🌼','💐','🍀','☘️','🌿','🍄','🌵','🌴','🌲','🌳','🌈','⭐','🌟','💫','✨','☀️','🌙','🌛','❄️','🌊','🔥','💧','🌪️','⛅','🌤️','🏔️','🌋','🌾','🪸'] },
+            { label: 'Food',    icon: '🍕', emojis: ['🍕','🍔','🍟','🌮','🌯','🍜','🍣','🍱','🍦','🍰','🎂','🍩','🍪','🍫','🍿','🧁','🥞','🧇','🍎','🍊','🍋','🍇','🍓','🫐','🥑','🥦','🌽','🥕','🍒','🍑','🥭','🍍','🥝','🥐','🍞','🧀'] },
+            { label: 'Sports',  icon: '⚽', emojis: ['⚽','🏀','🏈','⚾','🎾','🏐','🏉','🎱','🏓','🏸','🥊','🎯','🎳','🏆','🥇','🎮','🕹️','🎲','🧩','🎭','🎨','🎬','🎤','🎵','🎸','🎹','🎻','🥁','🚀','✈️','🛸','🚴','🏄','⛷️','🧘'] },
+            { label: 'Objects', icon: '💎', emojis: ['💎','👑','🎀','🎁','🎈','🎉','🔮','💡','🔭','📚','✏️','📱','💻','⌚','📷','🎒','🕶️','💍','🧲','💰','🔑','⚡','🌀','🪄','🧸','🪆','💝','🛡️','⚔️','🏺'] }
+        ];
+
+        // ── Firebase init ─────────────────────────────────────────────
+        if (window._configMissing || typeof FIREBASE_CONFIG === 'undefined') {
+            document.body.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667eea,#764ba2)">' +
+                '<div style="background:white;padding:2rem;border-radius:1rem;max-width:400px;text-align:center">' +
+                '<p style="font-size:1.2rem;font-weight:bold;color:#ef4444">Firebase not configured</p>' +
+                '<p style="margin-top:0.5rem;color:#6b7280">See README.md for setup instructions.</p>' +
+                '<a href="index.html" style="display:inline-block;margin-top:1rem;color:#6366f1">← Back to home</a></div></div>';
+        } else {
+            firebase.initializeApp(FIREBASE_CONFIG);
+            var auth = firebase.auth();
+            var db   = firebase.firestore();
+            var FieldValue = firebase.firestore.FieldValue;
+
+            var currentUser = null;
+            var familyCode  = null;
+
+            // In-memory caches updated by Firestore listeners
+            var childrenMap    = {}; // docId → child object
+            var activitiesArr  = [];
+            var cashoutsArr    = [];
+            var requestsArr    = [];
+            var choresMap      = {}; // docId → chore object
+
+            // Unsubscribe handles
+            var unsubs = [];
+
+            // ── Auth guard ─────────────────────────────────────────────
+            auth.onAuthStateChanged(function(user) {
+                if (!user) { window.location.href = 'index.html'; return; }
+                currentUser = user;
+                document.getElementById('settings-parent-email').textContent = user.email;
+                loadFamilyAndListen(user.uid);
+            });
+
+            function loadFamilyAndListen(uid) {
+                // Load family doc for familyCode and parentName
+                db.collection('families').doc(uid).get().then(function(doc) {
+                    var data = doc.exists ? doc.data() : {};
+                    familyCode = data.familyCode;
+                    var parentName = data.parentName || (currentUser.displayName) || 'Parent';
+                    document.getElementById('sidebar-parent-name').textContent  = parentName;
+                    document.getElementById('settings-parent-name').textContent = parentName;
+
+                    // Family display name — default to surname
+                    var parts = parentName.trim().split(/\s+/);
+                    var defaultName = parts[parts.length - 1];
+                    var displayName = data.familyDisplayName || defaultName;
+                    document.getElementById('dashboard-family-name').textContent = displayName;
+                    document.getElementById('family-name-input').value = displayName;
+
+                    if (!familyCode) {
+                        // Family doc missing or has no code — generate one now
+                        var parts  = parentName.trim().split(/\s+/);
+                        var prefix = parts[parts.length-1].replace(/[^a-zA-Z]/g,'').substring(0,4).toUpperCase().padEnd(4,'X');
+                        var suffix = Math.random().toString(36).substring(2,6).toUpperCase();
+                        familyCode = prefix + '-' + suffix;
+                        db.collection('families').doc(uid).set({
+                            familyCode:  familyCode,
+                            parentName:  parentName,
+                            createdAt:   firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                    }
+                    document.getElementById('family-code-display').textContent = familyCode;
+                });
+
+                // Real-time listeners
+                var base = db.collection('families').doc(uid);
+
+                unsubs.push(base.collection('children').orderBy('createdAt').onSnapshot(function(snap) {
+                    childrenMap = {};
+                    snap.forEach(function(d) { childrenMap[d.id] = Object.assign({id:d.id}, d.data()); });
+                    renderChildren();
+                }));
+
+                unsubs.push(base.collection('activities').orderBy('timestamp','desc').limit(200).onSnapshot(function(snap) {
+                    activitiesArr = [];
+                    snap.forEach(function(d) { activitiesArr.push(Object.assign({id:d.id}, d.data())); });
+                    renderActivity();
+                    renderFullHistory();
+                }));
+
+                unsubs.push(base.collection('cashouts').orderBy('timestamp','desc').limit(100).onSnapshot(function(snap) {
+                    cashoutsArr = [];
+                    snap.forEach(function(d) { cashoutsArr.push(Object.assign({id:d.id}, d.data())); });
+                    renderCashOutHistory();
+                }));
+
+                unsubs.push(base.collection('pointRequests').where('status','==','pending').onSnapshot(function(snap) {
+                    requestsArr = [];
+                    snap.forEach(function(d) { requestsArr.push(Object.assign({id:d.id}, d.data())); });
+                    requestsArr.sort(function(a,b) {
+                        var ta = a.createdAt ? a.createdAt.toMillis() : 0;
+                        var tb = b.createdAt ? b.createdAt.toMillis() : 0;
+                        return ta - tb;
+                    });
+                    renderRequests();
+                    updateRequestsBadge();
+                }));
+
+                unsubs.push(base.collection('chores').orderBy('createdAt').onSnapshot(function(snap) {
+                    choresMap = {};
+                    snap.forEach(function(d) { choresMap[d.id] = Object.assign({id:d.id}, d.data()); });
+                    renderChores();
+                }));
+            }
+
+            // ── Panel navigation ───────────────────────────────────────
+            function showPanel(name) {
+                document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+                document.getElementById('panel-'+name).classList.add('active');
+                document.querySelectorAll('.sidebar-item').forEach(function(i) { i.classList.remove('active'); });
+                var nav = document.querySelector('[data-panel="'+name+'"]');
+                if (nav) nav.classList.add('active');
+            }
+
+            // ── Render: Children grid ──────────────────────────────────
+            function renderChildren() {
+                var grid = document.getElementById('childrenGrid');
+                var children = Object.values(childrenMap);
+                if (children.length === 0) {
+                    grid.innerHTML = '<div class="col-span-full text-center py-16"><div class="text-6xl mb-4">👨‍👩‍👧‍👦</div><p class="text-white/80 text-lg">No children added yet. Click "Add Child" to get started!</p></div>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < children.length; i++) {
+                    var c = children[i];
+                    var balColor = c.points < 0 ? '#ef4444' : c.color;
+                    html += '<div class="glass-card rounded-2xl p-6 neu-shadow hover:scale-[1.01] transition-all duration-300">';
+                    html += '<div class="flex items-center justify-between mb-4">';
+                    html += '<div class="flex items-center gap-3">';
+                    html += '<div class="avatar-ring">' + renderAvatarEl(c.avatar, 'w-14 h-14') + '</div>';
+                    html += '<div><h3 class="text-lg font-bold text-gray-800">' + escHtml(c.name) + '</h3>';
+                    html += '<p class="text-sm text-gray-500">Total earned: ' + (c.totalEarned||0) + ' pts</p></div>';
+                    html += '</div>';
+                    html += '<div class="flex gap-0.5">';
+                    html += '<button onclick="openEditChildModal(\'' + c.id + '\')" class="text-gray-400 hover:text-indigo-500 transition-colors p-1" title="Edit child"><i class="fas fa-edit text-sm"></i></button>';
+                    html += '<button onclick="confirmRemoveChild(\'' + c.id + '\')" class="text-gray-400 hover:text-red-500 transition-colors p-1" title="Remove child"><i class="fas fa-trash-alt text-sm"></i></button>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '<div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4 mb-4 text-center">';
+                    html += '<p class="text-sm text-gray-500 mb-1">Current Balance</p>';
+                    html += '<p class="text-4xl font-bold" style="color:' + balColor + '">' + (c.points||0) + '</p>';
+                    html += '<p class="text-xs text-gray-400 mt-1">points · $' + ((c.points||0)*0.1).toFixed(2) + '</p>';
+                    if (c.points < 0) html += '<p class="text-xs text-red-400 mt-1 font-semibold">⚠ Negative balance</p>';
+                    html += '</div>';
+                    html += '<div class="flex gap-2 mb-2">';
+                    html += '<button onclick="openAddPointsModal(\'' + c.id + '\')" class="flex-1 py-2.5 bg-gradient-to-r from-green-400 to-emerald-500 text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-1"><i class="fas fa-plus text-xs"></i> Add</button>';
+                    html += '<button onclick="openRemovePointsModal(\'' + c.id + '\')" class="flex-1 py-2.5 bg-gradient-to-r from-orange-400 to-red-400 text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-1"><i class="fas fa-minus text-xs"></i> Remove</button>';
+                    html += '<button onclick="openCashOutModal(\'' + c.id + '\')" class="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-1"><i class="fas fa-money-bill-wave text-xs"></i> Cash Out</button>';
+                    html += '</div>';
+                    var pinLabel = c.pinHash ? '<i class="fas fa-check-circle text-emerald-500"></i> PIN set' : '<i class="fas fa-exclamation-circle text-amber-500"></i> No PIN set';
+                    html += '<button onclick="openSetPinModal(\'' + c.id + '\')" class="w-full py-2 text-xs text-gray-500 hover:text-indigo-600 border border-gray-200 hover:border-indigo-300 rounded-xl transition-colors flex items-center justify-center gap-1.5">' + pinLabel + ' — click to change</button>';
+                    html += '</div>';
+                }
+                grid.innerHTML = html;
+            }
+
+            // ── Render: Recent Activity ────────────────────────────────
+            function renderActivity() {
+                renderActivityList('activityList', activitiesArr.slice(0, 50));
+            }
+
+            function renderFullHistory() {
+                renderActivityList('fullHistoryList', activitiesArr);
+            }
+
+            function renderActivityList(elId, items) {
+                var list = document.getElementById(elId);
+                if (items.length === 0) {
+                    list.innerHTML = '<p class="text-gray-400 text-center py-8">No activity yet.</p>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < items.length; i++) {
+                    var a = items[i];
+                    var icon, bg, colorClass, sign;
+                    if (a.type === 'add' || a.type === 'request_approved') {
+                        icon = 'fa-arrow-up text-green-500'; bg = 'bg-green-50'; colorClass = 'text-green-600'; sign = '+';
+                    } else if (a.type === 'remove') {
+                        icon = 'fa-arrow-down text-red-500'; bg = 'bg-red-50'; colorClass = 'text-red-500'; sign = '-';
+                    } else {
+                        icon = 'fa-money-bill-wave text-indigo-500'; bg = 'bg-indigo-50'; colorClass = 'text-indigo-600'; sign = '-';
+                    }
+                    var ts = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate().toLocaleString() : a.timestamp) : '';
+                    html += '<div class="flex items-center gap-3 p-3 ' + bg + ' rounded-xl">';
+                    html += '<div class="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm"><i class="fas ' + icon + ' text-sm"></i></div>';
+                    html += '<div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-700 truncate">' + escHtml(a.description||'') + '</p>';
+                    html += '<p class="text-xs text-gray-400">' + ts + '</p></div>';
+                    html += '<span class="text-sm font-bold ' + colorClass + ' shrink-0">' + sign + (a.amount||0) + ' pts</span>';
+                    html += '</div>';
+                }
+                list.innerHTML = html;
+            }
+
+            // ── Render: Cash Out History ───────────────────────────────
+            function renderCashOutHistory() {
+                var list = document.getElementById('cashOutHistory');
+                if (cashoutsArr.length === 0) {
+                    list.innerHTML = '<p class="text-gray-400 text-center py-8">No cash outs yet.</p>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < Math.min(cashoutsArr.length, 50); i++) {
+                    var c = cashoutsArr[i];
+                    var ts = c.timestamp ? (c.timestamp.toDate ? c.timestamp.toDate().toLocaleString() : c.timestamp) : '';
+                    html += '<div class="flex items-center gap-3 p-3 bg-purple-50 rounded-xl">';
+                    html += '<div class="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm"><i class="fas fa-dollar-sign text-purple-500 text-sm"></i></div>';
+                    html += '<div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-700">' + escHtml(c.childName||'') + ' cashed out</p>';
+                    html += '<p class="text-xs text-gray-400">' + ts + (c.reason ? ' — ' + escHtml(c.reason) : '') + '</p></div>';
+                    html += '<span class="text-sm font-bold text-purple-600 shrink-0">' + (c.amount||0) + ' pts ($' + ((c.amount||0)*0.1).toFixed(2) + ')</span>';
+                    html += '</div>';
+                }
+                list.innerHTML = html;
+            }
+
+            // ── Render: Requests ───────────────────────────────────────
+            function renderRequests() {
+                var list = document.getElementById('requestsList');
+                if (requestsArr.length === 0) {
+                    list.innerHTML = '<p class="text-gray-400 text-center py-12">No pending requests — you\'re all caught up!</p>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < requestsArr.length; i++) {
+                    var r = requestsArr[i];
+                    var ts = r.createdAt ? (r.createdAt.toDate ? r.createdAt.toDate().toLocaleString() : r.createdAt) : '';
+                    var child = findChildByName(r.childName);
+                    var avatar = child ? child.avatar : '😊';
+                    html += '<div class="flex items-start gap-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl mb-3">';
+                    html += '<div class="text-3xl shrink-0">' + avatar + '</div>';
+                    html += '<div class="flex-1 min-w-0">';
+                    html += '<p class="font-bold text-gray-800">' + escHtml(r.childName||'') + '</p>';
+                    html += '<p class="text-sm text-indigo-700 font-semibold mt-0.5">' + escHtml(r.choreName||'Custom task') + ' <span class="text-gray-500 font-normal">· ' + (r.pointsRequested||0) + ' pts requested</span></p>';
+                    if (r.description) html += '<p class="text-sm text-gray-600 mt-1 italic">"' + escHtml(r.description) + '"</p>';
+                    html += '<p class="text-xs text-gray-400 mt-1">' + ts + '</p>';
+                    html += '</div>';
+                    html += '<div class="flex flex-col gap-2 shrink-0">';
+                    html += '<button onclick="approveRequest(\'' + r.id + '\',\'' + r.childId + '\',' + (r.pointsRequested||0) + ',\'' + escAttr(r.choreName||'') + '\')" class="px-4 py-2 bg-gradient-to-r from-green-400 to-emerald-500 text-white rounded-xl text-sm font-semibold hover:shadow-md transition-all"><i class="fas fa-check mr-1"></i>Approve</button>';
+                    html += '<button onclick="rejectRequest(\'' + r.id + '\')" class="px-4 py-2 bg-gradient-to-r from-red-400 to-red-500 text-white rounded-xl text-sm font-semibold hover:shadow-md transition-all"><i class="fas fa-times mr-1"></i>Reject</button>';
+                    html += '</div></div>';
+                }
+                list.innerHTML = html;
+            }
+
+            function updateRequestsBadge() {
+                var badge = document.getElementById('requests-badge');
+                if (requestsArr.length > 0) {
+                    badge.textContent = requestsArr.length;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+
+            // ── Render: Chore Catalog ──────────────────────────────────
+            function renderChores() {
+                var list = document.getElementById('choreList');
+                var chores = Object.values(choresMap);
+                if (chores.length === 0) {
+                    list.innerHTML = '<p class="text-gray-400 text-center py-12">No chores yet. Add some so your kids can request points!</p>';
+                    return;
+                }
+                var html = '<div class="divide-y divide-gray-100">';
+                for (var i = 0; i < chores.length; i++) {
+                    var c = chores[i];
+                    var activeClass = c.active ? 'on' : '';
+                    html += '<div class="flex items-center gap-4 py-4 first:pt-0 last:pb-0">';
+                    html += '<div class="flex-1"><p class="font-semibold text-gray-800">' + escHtml(c.name||'') + '</p>';
+                    html += '<p class="text-sm text-indigo-600 font-medium">' + (c.points||0) + ' points</p></div>';
+                    html += '<span class="text-xs px-2 py-1 rounded-full font-medium ' + (c.active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500') + '">' + (c.active ? 'Active' : 'Inactive') + '</span>';
+                    html += '<div class="toggle-switch ' + activeClass + '" onclick="toggleChore(\'' + c.id + '\',' + (!c.active) + ')" title="Toggle active"></div>';
+                    html += '<button onclick="openEditChoreModal(\'' + c.id + '\')" class="p-2 text-gray-400 hover:text-indigo-600 transition-colors" title="Edit"><i class="fas fa-edit"></i></button>';
+                    html += '<button onclick="deleteChore(\'' + c.id + '\')" class="p-2 text-gray-400 hover:text-red-500 transition-colors" title="Delete"><i class="fas fa-trash-alt"></i></button>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                list.innerHTML = html;
+            }
+
+            // ── Modal helpers ──────────────────────────────────────────
+            function showModal(html) {
+                document.getElementById('modalContent').innerHTML = html;
+                document.getElementById('modalOverlay').classList.remove('hidden');
+            }
+
+            function closeModal() { document.getElementById('modalOverlay').classList.add('hidden'); }
+
+            document.getElementById('modalOverlay').addEventListener('click', function(e) {
+                if (e.target === this) closeModal();
+            });
+
+            // ── Modal: Add Child ───────────────────────────────────────
+            function openAddChildModal() {
+                showModal(
+                    '<h3 class="text-xl font-bold text-gray-800 mb-5 flex items-center gap-2"><i class="fas fa-user-plus text-indigo-500"></i> Add New Child</h3>' +
+                    '<div class="space-y-4">' +
+                    '<div><label class="block text-sm font-medium text-gray-700 mb-1">Name</label><input id="childNameInput" type="text" placeholder="Enter child\'s name" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors"></div>' +
+                    buildAvatarPicker() +
+                    '<div><label class="block text-sm font-medium text-gray-700 mb-1">Starting Points</label><input id="startingPoints" type="number" value="0" min="0" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors"></div>' +
+                    '<div><label class="block text-sm font-medium text-gray-700 mb-1">Child\'s PIN <span class="text-gray-400 font-normal">(4 digits — required for child login)</span></label>' +
+                    '<div class="flex gap-2 mt-1"><input type="password" inputmode="numeric" maxlength="1" class="pin-box" id="cp0" oninput="mPinInput(0)" onkeydown="mPinKeydown(event,0)"><input type="password" inputmode="numeric" maxlength="1" class="pin-box" id="cp1" oninput="mPinInput(1)" onkeydown="mPinKeydown(event,1)"><input type="password" inputmode="numeric" maxlength="1" class="pin-box" id="cp2" oninput="mPinInput(2)" onkeydown="mPinKeydown(event,2)"><input type="password" inputmode="numeric" maxlength="1" class="pin-box" id="cp3" oninput="mPinInput(3)" onkeydown="mPinKeydown(event,3)"></div>' +
+                    '<p class="text-xs text-gray-400 mt-1">Leave blank to add without a PIN (set it later)</p></div>' +
+                    '<div id="add-child-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm mt-2"></div>' +
+                    '<div class="flex gap-3 mt-4"><button onclick="closeModal()" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>' +
+                    '<button onclick="addChild()" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200">Add Child</button></div>' +
+                    '</div>'
+                );
+            }
+
+            function mPinInput(i) {
+                var ids = ['cp0','cp1','cp2','cp3'];
+                var el  = document.getElementById(ids[i]);
+                if (!el) return;
+                el.value = el.value.replace(/\D/g,'').slice(-1);
+                if (el.value && i < 3) { var next = document.getElementById(ids[i+1]); if (next) next.focus(); }
+            }
+
+            function mPinKeydown(e, i) {
+                var ids = ['cp0','cp1','cp2','cp3'];
+                if (e.key==='Backspace' && !document.getElementById(ids[i]).value && i>0)
+                    document.getElementById(ids[i-1]).focus();
+            }
+
+            function getModalPin() {
+                var ids = ['cp0','cp1','cp2','cp3'];
+                return ids.map(function(id){ var el=document.getElementById(id); return el?el.value:''; }).join('');
+            }
+
+            function selectAvatar(el, avatar) {
+                document.querySelectorAll('.avatar-pick').forEach(function(p) { p.classList.remove('bg-indigo-200','ring-2','ring-indigo-500'); });
+                el.classList.add('bg-indigo-200','ring-2','ring-indigo-500');
+                document.getElementById('selectedAvatar').value = avatar;
+            }
+
+            function showModalError(elId, msg) {
+                var el = document.getElementById(elId);
+                if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+            }
+
+            var addChild = async function() {
+                var errId    = 'add-child-error';
+                var name     = document.getElementById('childNameInput').value.trim();
+                var avatar   = document.getElementById('selectedAvatar').value;
+                var startPts = parseInt(document.getElementById('startingPoints').value) || 0;
+                var pin      = getModalPin();
+                if (!name) { showModalError(errId, 'Please enter a name.'); return; }
+                if (pin.length > 0 && pin.length < 4) { showModalError(errId, 'PIN must be exactly 4 digits, or leave it blank.'); return; }
+                var color = COLORS[Object.keys(childrenMap).length % COLORS.length];
+                try {
+                    var pinHash = null;
+                    if (pin.length === 4) {
+                        pinHash = await sha256(pin);
+                    }
+                    await db.collection('families').doc(currentUser.uid).collection('children').add({
+                        name:        name,
+                        avatar:      avatar,
+                        color:       color,
+                        points:      startPts,
+                        totalEarned: startPts,
+                        pinHash:     pinHash,
+                        createdAt:   FieldValue.serverTimestamp()
+                    });
+                    closeModal();
+                } catch(e) { showModalError(errId, 'Error adding child: ' + (e.message || e.code || 'Unknown error')); }
+            }
+
+            // ── Modal: Remove Child ────────────────────────────────────
+            var confirmRemoveChild = function(id) {
+                var child = childrenMap[id];
+                if (!child) return;
+                showModal(
+                    '<h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="fas fa-trash-alt text-red-500"></i> Remove ' + escHtml(child.name) + '?</h3>' +
+                    '<p class="text-gray-600 mb-6">This will permanently remove <strong>' + escHtml(child.name) + '</strong> from your family. This cannot be undone.</p>' +
+                    '<div class="flex gap-3"><button onclick="closeModal()" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>' +
+                    '<button onclick="doRemoveChild(\'' + id + '\')" class="flex-1 py-3 bg-gradient-to-r from-red-400 to-red-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200"><i class="fas fa-trash-alt mr-1"></i> Remove</button></div>'
+                );
+            }
+
+            var doRemoveChild = async function(id) {
+                try {
+                    await db.collection('families').doc(currentUser.uid).collection('children').doc(id).delete();
+                    closeModal();
+                } catch(e) { alert('Error removing child: ' + e.message); }
+            }
+
+            // ── Modal: Edit Child ──────────────────────────────────────
+            var openEditChildModal = function(childId) {
+                var child = childrenMap[childId];
+                if (!child) return;
+                showModal(
+                    '<h3 class="text-xl font-bold text-gray-800 mb-5 flex items-center gap-2"><i class="fas fa-edit text-indigo-500"></i> Edit ' + escHtml(child.name) + '</h3>' +
+                    '<div class="space-y-4">' +
+                    '<div><label class="block text-sm font-medium text-gray-700 mb-1">Name</label><input id="editChildName" type="text" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors"></div>' +
+                    buildAvatarPicker() +
+                    '<div id="edit-child-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm"></div>' +
+                    '<div class="flex gap-3 mt-4"><button onclick="closeModal()" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>' +
+                    '<button onclick="saveEditChild(\'' + childId + '\')" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200">Save Changes</button></div>' +
+                    '</div>'
+                );
+                document.getElementById('editChildName').value = child.name;
+                setAvatarPickerValue(child.avatar);
+            };
+
+            var saveEditChild = async function(childId) {
+                var name  = document.getElementById('editChildName').value.trim();
+                var avatar = document.getElementById('selectedAvatar').value;
+                if (!name) { showModalError('edit-child-error', 'Please enter a name.'); return; }
+                try {
+                    await db.collection('families').doc(currentUser.uid).collection('children').doc(childId).update({ name: name, avatar: avatar });
+                    closeModal();
+                } catch(e) { showModalError('edit-child-error', 'Error saving: ' + (e.message || e.code)); }
+            };
+
+            // ── Modal: Set PIN ─────────────────────────────────────────
+            function openSetPinModal(childId) {
+                var child = childrenMap[childId];
+                if (!child) return;
+                showModal(
+                    '<h3 class="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2"><i class="fas fa-key text-indigo-500"></i> Set PIN for ' + escHtml(child.name) + '</h3>' +
+                    '<p class="text-gray-500 text-sm mb-5">This is the 4-digit code your child will use to log in.</p>' +
+                    '<div class="flex justify-center gap-3 mb-2">' +
+                    '<input type="password" inputmode="numeric" maxlength="1" class="pin-box" id="sp0" oninput="sPinInput(0)" onkeydown="sPinKeydown(event,0)">' +
+                    '<input type="password" inputmode="numeric" maxlength="1" class="pin-box" id="sp1" oninput="sPinInput(1)" onkeydown="sPinKeydown(event,1)">' +
+                    '<input type="password" inputmode="numeric" maxlength="1" class="pin-box" id="sp2" oninput="sPinInput(2)" onkeydown="sPinKeydown(event,2)">' +
+                    '<input type="password" inputmode="numeric" maxlength="1" class="pin-box" id="sp3" oninput="sPinInput(3)" onkeydown="sPinKeydown(event,3)">' +
+                    '</div>' +
+                    '<div class="flex gap-3 mt-5">' +
+                    '<button onclick="closeModal()" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>' +
+                    '<button onclick="doSetPin(\'' + childId + '\')" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200">Save PIN</button>' +
+                    '</div>'
+                );
+                setTimeout(function(){ var el=document.getElementById('sp0'); if(el)el.focus(); }, 50);
+            }
+
+            function sPinInput(i) {
+                var ids=['sp0','sp1','sp2','sp3'];
+                var el=document.getElementById(ids[i]); if(!el)return;
+                el.value=el.value.replace(/\D/g,'').slice(-1);
+                if(el.value&&i<3){var n=document.getElementById(ids[i+1]);if(n)n.focus();}
+            }
+            function sPinKeydown(e,i){
+                var ids=['sp0','sp1','sp2','sp3'];
+                if(e.key==='Backspace'&&!document.getElementById(ids[i]).value&&i>0)document.getElementById(ids[i-1]).focus();
+                if(e.key==='Enter')doSetPin(document.getElementById('sp0').closest('.flex').getAttribute('data-child-id'));
+            }
+
+            var doSetPin = async function(childId) {
+                var ids=['sp0','sp1','sp2','sp3'];
+                var pin=ids.map(function(id){var el=document.getElementById(id);return el?el.value:'';}).join('');
+                if(pin.length<4){alert('Please enter all 4 digits.');return;}
+                try {
+                    var h=await sha256(pin);
+                    await db.collection('families').doc(currentUser.uid).collection('children').doc(childId).update({pinHash:h});
+                    closeModal();
+                } catch(e){alert('Error saving PIN: '+e.message);}
+            }
+
+            // ── Modal: Add Points ──────────────────────────────────────
+            function openAddPointsModal(childId) {
+                var child = childrenMap[childId];
+                if (!child) return;
+                showModal(
+                    '<h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2"><i class="fas fa-plus-circle text-green-500"></i> Add Points for ' + escHtml(child.name) + '</h3>' +
+                    '<div class="space-y-4">' +
+                    '<div><label class="block text-sm font-medium text-gray-700 mb-1">Points to Add</label><input id="pointsInput" type="number" min="1" value="10" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none transition-colors text-center text-2xl font-bold"></div>' +
+                    '<div><label class="block text-sm font-medium text-gray-700 mb-1">Reason (optional)</label><input id="reasonInput" type="text" placeholder="e.g. Cleaned room" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none transition-colors"></div>' +
+                    '<div class="flex flex-wrap gap-2">' +
+                    '<button onclick="document.getElementById(\'pointsInput\').value=5" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors">+5</button>' +
+                    '<button onclick="document.getElementById(\'pointsInput\').value=10" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors">+10</button>' +
+                    '<button onclick="document.getElementById(\'pointsInput\').value=25" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors">+25</button>' +
+                    '<button onclick="document.getElementById(\'pointsInput\').value=50" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors">+50</button>' +
+                    '<button onclick="document.getElementById(\'pointsInput\').value=100" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors">+100</button>' +
+                    '</div>' +
+                    '<div class="flex gap-3 mt-6"><button onclick="closeModal()" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>' +
+                    '<button onclick="doAddPoints(\'' + childId + '\')" class="flex-1 py-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200">Add Points</button></div>' +
+                    '</div>'
+                );
+            }
+
+            var doAddPoints = async function(childId) {
+                var child  = childrenMap[childId];
+                var pts    = parseInt(document.getElementById('pointsInput').value);
+                var reason = document.getElementById('reasonInput').value.trim();
+                if (!pts || pts <= 0) { alert('Enter a valid number of points'); return; }
+                var desc = escHtml(child.name) + ' earned ' + pts + ' points' + (reason ? ' for ' + reason : '');
+                try {
+                    var batch = db.batch();
+                    var childRef = db.collection('families').doc(currentUser.uid).collection('children').doc(childId);
+                    batch.update(childRef, { points: FieldValue.increment(pts), totalEarned: FieldValue.increment(pts) });
+                    var actRef = db.collection('families').doc(currentUser.uid).collection('activities').doc();
+                    batch.set(actRef, { type:'add', childId:childId, childName:child.name, amount:pts, description:desc, timestamp:FieldValue.serverTimestamp() });
+                    await batch.commit();
+                    closeModal();
+                } catch(e) { alert('Error: ' + e.message); }
+            }
+
+            // ── Modal: Remove Points ───────────────────────────────────
+            function openRemovePointsModal(childId) {
+                var child = childrenMap[childId];
+                if (!child) return;
+                showModal(
+                    '<h3 class="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2"><i class="fas fa-minus-circle text-red-500"></i> Remove Points from ' + escHtml(child.name) + '</h3>' +
+                    '<p class="text-sm text-gray-500 mb-4">Current balance: <strong>' + (child.points||0) + ' pts</strong></p>' +
+                    '<div class="space-y-4">' +
+                    '<div><label class="block text-sm font-medium text-gray-700 mb-1">Points to Remove</label><input id="removePointsInput" type="number" min="1" value="5" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-red-500 focus:outline-none transition-colors text-center text-2xl font-bold"></div>' +
+                    '<div><label class="block text-sm font-medium text-gray-700 mb-1">Reason (optional)</label><input id="removeReasonInput" type="text" placeholder="e.g. Misbehavior" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-red-500 focus:outline-none transition-colors"></div>' +
+                    '<div class="flex gap-3 mt-6"><button onclick="closeModal()" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>' +
+                    '<button onclick="doRemovePoints(\'' + childId + '\')" class="flex-1 py-3 bg-gradient-to-r from-orange-400 to-red-400 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200">Remove Points</button></div>' +
+                    '</div>'
+                );
+            }
+
+            var doRemovePoints = async function(childId) {
+                var child  = childrenMap[childId];
+                var pts    = parseInt(document.getElementById('removePointsInput').value);
+                var reason = document.getElementById('removeReasonInput').value.trim();
+                if (!pts || pts <= 0) { alert('Enter a valid number of points'); return; }
+                var desc = escHtml(child.name) + ' lost ' + pts + ' points' + (reason ? ' — ' + reason : '');
+                try {
+                    var batch = db.batch();
+                    var childRef = db.collection('families').doc(currentUser.uid).collection('children').doc(childId);
+                    batch.update(childRef, { points: FieldValue.increment(-pts) });
+                    var actRef = db.collection('families').doc(currentUser.uid).collection('activities').doc();
+                    batch.set(actRef, { type:'remove', childId:childId, childName:child.name, amount:pts, description:desc, timestamp:FieldValue.serverTimestamp() });
+                    await batch.commit();
+                    closeModal();
+                } catch(e) { alert('Error: ' + e.message); }
+            }
+
+            // ── Modal: Cash Out ────────────────────────────────────────
+            var _cashOutChildId = null;
+
+            function openCashOutModal(childId) {
+                var child = childrenMap[childId];
+                if (!child) return;
+                _cashOutChildId = childId;
+                var defVal   = Math.max(child.points||0, 0);
+                var cashVal  = (defVal * 0.1).toFixed(2);
+                showModal(
+                    '<h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2"><i class="fas fa-money-bill-wave text-indigo-500"></i> Cash Out for ' + escHtml(child.name) + '</h3>' +
+                    '<p class="text-sm text-gray-500 mb-4">Current balance: <strong>' + (child.points||0) + ' pts</strong> ($' + ((child.points||0)*0.1).toFixed(2) + ')' + (child.points<0?' <span class="text-red-500 font-semibold">(negative)</span>':'') + '</p>' +
+                    '<div class="space-y-4">' +
+                    '<div><label class="block text-sm font-medium text-gray-700 mb-1">Points to Cash Out</label><input id="cashOutInput" type="number" min="1" value="' + defVal + '" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors text-center text-2xl font-bold" oninput="updateCashValue()"></div>' +
+                    '<div class="bg-indigo-50 rounded-xl p-4 text-center"><p class="text-sm text-gray-500">Cash Value</p><p class="text-3xl font-bold text-indigo-600" id="cashValue">$' + cashVal + '</p><p class="text-xs text-gray-400 mt-1">10 pts = $1.00</p></div>' +
+                    '<div id="cashOutWarning" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3 text-center"><p class="text-sm text-amber-700 font-medium">⚠ This will result in a negative balance</p></div>' +
+                    '<div><label class="block text-sm font-medium text-gray-700 mb-1">Note (optional)</label><input id="cashOutReasonInput" type="text" placeholder="e.g. Birthday money, Allowance" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors"></div>' +
+                    '<div class="flex gap-3 mt-6"><button onclick="closeModal()" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>' +
+                    '<button onclick="doCashOut(\'' + childId + '\')" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200"><i class="fas fa-check mr-1"></i> Cash Out</button></div>' +
+                    '</div>'
+                );
+            }
+
+            function updateCashValue() {
+                var v = parseInt(document.getElementById('cashOutInput').value)||0;
+                document.getElementById('cashValue').textContent = '$' + (v*0.1).toFixed(2);
+                var warn = document.getElementById('cashOutWarning');
+                if (_cashOutChildId && childrenMap[_cashOutChildId]) {
+                    v > (childrenMap[_cashOutChildId].points||0) ? warn.classList.remove('hidden') : warn.classList.add('hidden');
+                }
+            }
+
+            var doCashOut = async function(childId) {
+                var child = childrenMap[childId];
+                if (!child) return;
+                var pts    = parseInt(document.getElementById('cashOutInput').value);
+                var reason = document.getElementById('cashOutReasonInput').value.trim();
+                if (!pts || pts <= 0) { alert('Please enter a valid amount greater than 0'); return; }
+                if (pts > (child.points||0)) {
+                    if (!confirm(child.name + ' will go into negative balance (' + ((child.points||0)-pts) + ' pts). Continue?')) return;
+                }
+                var cashVal = (pts*0.1).toFixed(2);
+                var desc    = escHtml(child.name) + ' cashed out ' + pts + ' points ($' + cashVal + ')' + (reason ? ' — ' + reason : '');
+                try {
+                    var batch    = db.batch();
+                    var childRef = db.collection('families').doc(currentUser.uid).collection('children').doc(childId);
+                    var coRef    = db.collection('families').doc(currentUser.uid).collection('cashouts').doc();
+                    var actRef   = db.collection('families').doc(currentUser.uid).collection('activities').doc();
+                    batch.update(childRef, { points: FieldValue.increment(-pts) });
+                    batch.set(coRef,  { childId:childId, childName:child.name, amount:pts, cashValue:cashVal, reason:reason, timestamp:FieldValue.serverTimestamp() });
+                    batch.set(actRef, { type:'cashout', childId:childId, childName:child.name, amount:pts, description:desc, timestamp:FieldValue.serverTimestamp() });
+                    await batch.commit();
+                    closeModal();
+                } catch(e) { alert('Error: ' + e.message); }
+            }
+
+            // ── Requests: Approve / Reject ─────────────────────────────
+            var approveRequest = async function(reqId, childId, pts, choreName) {
+                var child = childrenMap[childId];
+                if (!child) { alert('Child not found'); return; }
+                var desc = escHtml(child.name) + ' earned ' + pts + ' points for ' + choreName + ' (approved request)';
+                try {
+                    var batch    = db.batch();
+                    var reqRef   = db.collection('families').doc(currentUser.uid).collection('pointRequests').doc(reqId);
+                    var childRef = db.collection('families').doc(currentUser.uid).collection('children').doc(childId);
+                    var actRef   = db.collection('families').doc(currentUser.uid).collection('activities').doc();
+                    batch.update(reqRef,   { status:'approved', reviewedAt:FieldValue.serverTimestamp() });
+                    batch.update(childRef, { points:FieldValue.increment(pts), totalEarned:FieldValue.increment(pts) });
+                    batch.set(actRef, { type:'request_approved', childId:childId, childName:child.name, amount:pts, description:desc, timestamp:FieldValue.serverTimestamp() });
+                    await batch.commit();
+                } catch(e) { alert('Error approving request: ' + e.message); }
+            }
+
+            var rejectRequest = async function(reqId) {
+                try {
+                    await db.collection('families').doc(currentUser.uid).collection('pointRequests').doc(reqId)
+                        .update({ status:'rejected', reviewedAt:FieldValue.serverTimestamp() });
+                } catch(e) { alert('Error rejecting request: ' + e.message); }
+            }
+
+            // ── Chore Catalog CRUD ─────────────────────────────────────
+            function openAddChoreModal(editId) {
+                var chore   = editId ? choresMap[editId] : null;
+                var title   = chore ? 'Edit Chore' : 'Add Chore';
+                var nameDef = chore ? escAttr(chore.name) : '';
+                var ptsDef  = chore ? (chore.points||0) : 10;
+                showModal(
+                    '<h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2"><i class="fas fa-tasks text-indigo-500"></i> ' + title + '</h3>' +
+                    '<div class="space-y-4">' +
+                    '<div><label class="block text-sm font-medium text-gray-700 mb-1">Chore Name</label><input id="choreNameInput" type="text" value="' + nameDef + '" placeholder="e.g. Wash the dishes" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors"></div>' +
+                    '<div><label class="block text-sm font-medium text-gray-700 mb-1">Points Value</label><input id="chorePointsInput" type="number" min="1" value="' + ptsDef + '" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors text-center text-2xl font-bold"></div>' +
+                    '<div class="flex gap-3 mt-6"><button onclick="closeModal()" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>' +
+                    '<button onclick="saveChore(\'' + (editId||'') + '\')" class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200">Save</button></div>' +
+                    '</div>'
+                );
+            }
+
+            function openEditChoreModal(id) { openAddChoreModal(id); }
+
+            var saveChore = async function(editId) {
+                var name = document.getElementById('choreNameInput').value.trim();
+                var pts  = parseInt(document.getElementById('chorePointsInput').value);
+                if (!name) { alert('Please enter a chore name'); return; }
+                if (!pts || pts <= 0) { alert('Please enter a valid point value'); return; }
+                var base = db.collection('families').doc(currentUser.uid).collection('chores');
+                try {
+                    if (editId) {
+                        await base.doc(editId).update({ name:name, points:pts });
+                    } else {
+                        await base.add({ name:name, points:pts, active:true, createdAt:FieldValue.serverTimestamp() });
+                    }
+                    closeModal();
+                } catch(e) { alert('Error saving chore: ' + e.message); }
+            }
+
+            var toggleChore = async function(id, newActive) {
+                try {
+                    await db.collection('families').doc(currentUser.uid).collection('chores').doc(id).update({ active:newActive });
+                } catch(e) { alert('Error: ' + e.message); }
+            }
+
+            var deleteChore = async function(id) {
+                var chore = choresMap[id];
+                if (!chore) return;
+                if (!confirm('Delete "' + chore.name + '" from the catalog?')) return;
+                try {
+                    await db.collection('families').doc(currentUser.uid).collection('chores').doc(id).delete();
+                } catch(e) { alert('Error: ' + e.message); }
+            }
+
+            // ── Settings: Family Code ──────────────────────────────────
+            var saveFamilyName = async function() {
+                var name = document.getElementById('family-name-input').value.trim();
+                if (!name) return;
+                try {
+                    await db.collection('families').doc(currentUser.uid).update({ familyDisplayName: name });
+                    document.getElementById('dashboard-family-name').textContent = name;
+                    var msg = document.getElementById('family-name-saved');
+                    msg.classList.remove('hidden');
+                    setTimeout(function(){ msg.classList.add('hidden'); }, 2000);
+                } catch(e) { alert('Error saving: ' + e.message); }
+            };
+
+            function copyFamilyCode() {
+                if (!familyCode) return;
+                navigator.clipboard.writeText(familyCode).then(function() {
+                    var msg = document.getElementById('copy-confirmation');
+                    msg.classList.remove('hidden');
+                    setTimeout(function(){ msg.classList.add('hidden'); }, 2000);
+                });
+            }
+
+            function doSignOut() {
+                unsubs.forEach(function(u){ try{u();}catch(e){} });
+                auth.signOut().then(function(){ window.location.href='index.html'; });
+            }
+
+            // ── Export ─────────────────────────────────────────────────
+            function exportData() {
+                var data = [];
+                Object.values(childrenMap).forEach(function(c) {
+                    data.push({ type:'child', name:c.name, avatar:c.avatar, points:c.points, totalEarned:c.totalEarned });
+                });
+                activitiesArr.forEach(function(a) {
+                    var ts = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate().toLocaleString() : a.timestamp) : '';
+                    data.push({ type:'activity_'+a.type, name:a.childName, amount:a.amount, description:a.description, time:ts });
+                });
+                cashoutsArr.forEach(function(c) {
+                    var ts = c.timestamp ? (c.timestamp.toDate ? c.timestamp.toDate().toLocaleString() : c.timestamp) : '';
+                    data.push({ type:'cashout', name:c.childName, amount:c.amount, cashValue:c.cashValue, reason:c.reason, time:ts });
+                });
+                if (data.length === 0) { alert('No data to export.'); return; }
+                var csv  = Papa.unparse(data);
+                var blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+                var url  = URL.createObjectURL(blob);
+                var a    = document.createElement('a');
+                a.href=url; a.download='family_rewards_data.csv';
+                document.body.appendChild(a); a.click();
+                document.body.removeChild(a); URL.revokeObjectURL(url);
+            }
+
+            // ── Utilities ─────────────────────────────────────────────
+            function findChildByName(name) {
+                return Object.values(childrenMap).find(function(c){ return c.name===name; });
+            }
+
+            var sha256 = async function(str) {
+                var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+                return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+            }
+        }
+
+        // ── Avatar picker helpers (global — called from modal onclicks) ──
+        function renderEmojiGridHtml(catIdx) {
+            return EMOJI_CATEGORIES[catIdx].emojis.map(function(e) {
+                return '<button type="button" data-e="' + e + '" onclick="pickAvEmoji(this.dataset.e)" class="text-2xl p-1.5 rounded-lg hover:bg-indigo-100 active:bg-indigo-200 transition-colors leading-none">' + e + '</button>';
+            }).join('');
+        }
+
+        function buildAvatarPicker() {
+            var catTabs = EMOJI_CATEGORIES.map(function(cat, i) {
+                return '<button type="button" onclick="switchEmojiCat(' + i + ')" id="ecat-' + i + '" class="shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ' + (i===0 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600') + '">' + cat.icon + ' ' + cat.label + '</button>';
+            }).join('');
+            return (
+                '<div>' +
+                '<label class="block text-sm font-medium text-gray-700 mb-2">Avatar</label>' +
+                '<div class="flex justify-center mb-3"><div id="av-preview" class="w-20 h-20 rounded-full bg-indigo-50 border-2 border-indigo-200 flex items-center justify-center overflow-hidden text-4xl">😊</div></div>' +
+                '<div class="flex gap-1 bg-gray-100 rounded-xl p-1 mb-3">' +
+                '<button type="button" onclick="switchAvTab(\'emoji\')" id="avt-emoji" class="flex-1 py-1.5 rounded-lg text-sm font-medium bg-white shadow-sm text-gray-700">😊 Emoji</button>' +
+                '<button type="button" onclick="switchAvTab(\'photo\')" id="avt-photo" class="flex-1 py-1.5 rounded-lg text-sm font-medium text-gray-500">📷 Photo</button>' +
+                '<button type="button" onclick="switchAvTab(\'tmpl\')" id="avt-tmpl" class="flex-1 py-1.5 rounded-lg text-sm font-medium text-gray-500">⭐ Templates</button>' +
+                '</div>' +
+                '<div id="avp-emoji">' +
+                '<div class="flex gap-1 overflow-x-auto pb-2 mb-2">' + catTabs + '</div>' +
+                '<div id="emoji-grid" class="grid grid-cols-8 gap-0.5 max-h-40 overflow-y-auto">' + renderEmojiGridHtml(0) + '</div>' +
+                '</div>' +
+                '<div id="avp-photo" class="hidden">' +
+                '<label class="flex flex-col items-center gap-3 border-2 border-dashed border-gray-300 rounded-xl p-6 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-colors">' +
+                '<span class="text-3xl">📷</span>' +
+                '<span class="text-sm font-medium text-gray-600">Click to choose a photo</span>' +
+                '<span class="text-xs text-gray-400">Auto-cropped to a circle</span>' +
+                '<input type="file" accept="image/*" class="hidden" onchange="handleAvatarPhoto(this)">' +
+                '</label>' +
+                '</div>' +
+                '<div id="avp-tmpl" class="hidden text-center py-8">' +
+                '<p class="text-4xl mb-2">🖼️</p>' +
+                '<p class="text-sm font-medium text-gray-500">No templates yet</p>' +
+                '<p class="text-xs text-gray-400 mt-1">Custom avatar templates — coming soon!</p>' +
+                '</div>' +
+                '<input type="hidden" id="selectedAvatar" value="😊">' +
+                '</div>'
+            );
+        }
+
+        function setAvatarPickerValue(avatar) {
+            var av = avatar || '😊';
+            var inp = document.getElementById('selectedAvatar');
+            if (inp) inp.value = av;
+            var preview = document.getElementById('av-preview');
+            if (!preview) return;
+            if (av.startsWith('data:')) {
+                preview.innerHTML = '<img src="' + av + '" class="w-full h-full object-cover">';
+                switchAvTab('photo');
+            } else {
+                preview.textContent = av;
+            }
+        }
+
+        function switchAvTab(tab) {
+            ['emoji','photo','tmpl'].forEach(function(t) {
+                var panel = document.getElementById('avp-' + t);
+                var btn   = document.getElementById('avt-' + t);
+                if (!panel || !btn) return;
+                var active = t === tab;
+                panel.classList.toggle('hidden', !active);
+                btn.className = 'flex-1 py-1.5 rounded-lg text-sm font-medium ' + (active ? 'bg-white shadow-sm text-gray-700' : 'text-gray-500');
+            });
+        }
+
+        function switchEmojiCat(idx) {
+            var grid = document.getElementById('emoji-grid');
+            if (grid) grid.innerHTML = renderEmojiGridHtml(idx);
+            EMOJI_CATEGORIES.forEach(function(_, i) {
+                var btn = document.getElementById('ecat-' + i);
+                if (!btn) return;
+                btn.className = 'shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ' + (i === idx ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600');
+            });
+        }
+
+        function pickAvEmoji(emoji) {
+            var inp = document.getElementById('selectedAvatar');
+            if (inp) inp.value = emoji;
+            var preview = document.getElementById('av-preview');
+            if (preview) preview.textContent = emoji;
+        }
+
+        function handleAvatarPhoto(input) {
+            if (!input.files || !input.files[0]) return;
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var img = new Image();
+                img.onload = function() {
+                    var canvas = document.createElement('canvas');
+                    var size = 200;
+                    canvas.width = size; canvas.height = size;
+                    var ctx = canvas.getContext('2d');
+                    var min = Math.min(img.width, img.height);
+                    var sx = (img.width - min) / 2;
+                    var sy = (img.height - min) / 2;
+                    ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+                    var dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+                    var inp = document.getElementById('selectedAvatar');
+                    if (inp) inp.value = dataUrl;
+                    var preview = document.getElementById('av-preview');
+                    if (preview) preview.innerHTML = '<img src="' + dataUrl + '" class="w-full h-full object-cover">';
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+
+        function renderAvatarEl(avatar, sizeClass) {
+            var av = avatar || '😊';
+            if (av.startsWith('data:')) {
+                return '<img src="' + av + '" class="' + sizeClass + ' rounded-full object-cover">';
+            }
+            return '<div class="' + sizeClass + ' rounded-full flex items-center justify-center text-2xl bg-white">' + av + '</div>';
+        }
+
+        function escHtml(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function escAttr(s) { return escHtml(s); }
+
+        function showPanel(name) {
+            document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+            document.getElementById('panel-'+name).classList.add('active');
+            document.querySelectorAll('.sidebar-item').forEach(function(i){ i.classList.remove('active'); });
+            var nav=document.querySelector('[data-panel="'+name+'"]');
+            if(nav) nav.classList.add('active');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FamilyRewards — My Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        .glass-card {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .sidebar-item:hover, .sidebar-item.active { background: rgba(255,255,255,0.15); }
+        .neu-shadow { box-shadow: 8px 8px 16px rgba(0,0,0,0.1), -4px -4px 12px rgba(255,255,255,0.5); }
+        .avatar-ring {
+            background: conic-gradient(from 0deg, #667eea, #764ba2, #f093fb, #667eea);
+            padding: 3px; border-radius: 50%;
+        }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .chore-card { cursor: pointer; transition: all 0.2s; }
+        .chore-card:hover { transform: scale(1.03); }
+        .chore-card.selected { box-shadow: 0 0 0 3px #667eea; border-color: #667eea !important; }
+        .chore-card.selected .chore-pts { background: #667eea; color: white; }
+    </style>
+</head>
+<body class="flex">
+
+    <!-- ── Sidebar ─────────────────────────────────────────────────── -->
+    <aside class="w-64 min-h-screen bg-gradient-to-b from-indigo-900 to-purple-900 text-white p-6 flex flex-col fixed left-0 top-0 bottom-0 z-10">
+        <div class="flex items-center gap-3 mb-8">
+            <div id="child-avatar-sidebar" class="w-10 h-10 rounded-full flex items-center justify-center text-2xl overflow-hidden bg-indigo-700 shrink-0"></div>
+            <div>
+                <h1 id="child-name-sidebar" class="text-lg font-bold">Loading…</h1>
+                <p class="text-indigo-300 text-xs">Child Account</p>
+            </div>
+        </div>
+
+        <nav class="flex-1 space-y-1">
+            <div class="sidebar-item active flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200" onclick="showPanel('balance')" data-panel="balance">
+                <i class="fas fa-star w-5 text-center text-yellow-300"></i><span>My Balance</span>
+            </div>
+            <div class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200" onclick="showPanel('request')" data-panel="request">
+                <i class="fas fa-hand-point-up w-5 text-center"></i><span>Request Points</span>
+            </div>
+            <div class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200" onclick="showPanel('history')" data-panel="history">
+                <i class="fas fa-history w-5 text-center"></i><span>My History</span>
+            </div>
+            <div class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200" onclick="showPanel('cashouts')" data-panel="cashouts">
+                <i class="fas fa-dollar-sign w-5 text-center"></i><span>My Cash-Outs</span>
+            </div>
+        </nav>
+
+        <div class="mt-auto pt-6 border-t border-white/20">
+            <button onclick="doLogout()" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-indigo-300 hover:text-white hover:bg-white/10 transition-all duration-200 text-sm">
+                <i class="fas fa-sign-out-alt w-5 text-center"></i> Log Out
+            </button>
+        </div>
+    </aside>
+
+    <!-- ── Main ────────────────────────────────────────────────────── -->
+    <main class="ml-64 flex-1 p-8">
+
+        <!-- ── Panel: Balance ────────────────────────────────────── -->
+        <div id="panel-balance" class="panel active">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-white">My Balance</h2>
+                <p class="text-indigo-200 mt-1">Your current points and earnings</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="glass-card rounded-2xl p-6 neu-shadow text-center md:col-span-2">
+                    <p class="text-sm text-gray-500 mb-2">Current Balance</p>
+                    <p id="balance-points" class="text-7xl font-bold text-indigo-600 mb-2">—</p>
+                    <p class="text-lg text-gray-400">points</p>
+                    <div class="mt-4 bg-indigo-50 rounded-xl py-3 px-6 inline-block">
+                        <p class="text-sm text-gray-500">Cash value</p>
+                        <p id="balance-cash" class="text-3xl font-bold text-indigo-700">$0.00</p>
+                        <p class="text-xs text-gray-400 mt-0.5">10 pts = $1.00</p>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl p-6 neu-shadow text-center">
+                    <p class="text-sm text-gray-500 mb-2">Total Ever Earned</p>
+                    <p id="balance-total" class="text-4xl font-bold text-emerald-600 mb-1">—</p>
+                    <p class="text-sm text-gray-400">points lifetime</p>
+                </div>
+            </div>
+            <div class="glass-card rounded-2xl p-6 neu-shadow">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i class="fas fa-clock text-indigo-500"></i> Recent Activity
+                </h3>
+                <div id="balance-recent" class="space-y-3 max-h-72 overflow-y-auto">
+                    <p class="text-gray-400 text-center py-8">No activity yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Panel: Request Points ──────────────────────────────── -->
+        <div id="panel-request" class="panel">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-white">Request Points</h2>
+                <p class="text-indigo-200 mt-1">Tell a parent what you did to earn points</p>
+            </div>
+            <div class="glass-card rounded-2xl p-6 neu-shadow max-w-2xl">
+
+                <!-- Chore catalog -->
+                <h3 class="text-base font-bold text-gray-700 mb-3 flex items-center gap-2">
+                    <i class="fas fa-tasks text-indigo-500"></i> Pick a chore from the list
+                </h3>
+                <div id="chore-grid" class="grid grid-cols-2 gap-3 mb-6">
+                    <p class="text-gray-400 text-sm col-span-2">Loading chores…</p>
+                </div>
+
+                <!-- Divider -->
+                <div class="relative my-5">
+                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-200"></div></div>
+                    <div class="relative text-center"><span class="bg-white px-3 text-sm text-gray-400">or describe something else</span></div>
+                </div>
+
+                <!-- Free-text form -->
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">What did you do?</label>
+                        <textarea id="request-description" rows="3" placeholder="Describe what you did… (e.g. I helped carry groceries and put them away)"
+                            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors resize-none"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Points to request</label>
+                        <input id="request-points" type="number" min="1" value="10"
+                            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors text-center text-2xl font-bold">
+                        <p class="text-xs text-gray-400 mt-1">A parent will approve the final amount.</p>
+                    </div>
+                    <div id="request-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm"></div>
+                    <div id="request-success" class="hidden bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-4 text-center">
+                        <p class="font-semibold text-lg">Request sent! 🎉</p>
+                        <p class="text-sm mt-1">A parent will review it soon.</p>
+                    </div>
+                    <button onclick="submitRequest()" id="submit-request-btn"
+                        class="w-full py-3.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold text-lg hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2">
+                        <i class="fas fa-paper-plane"></i> Send Request
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Panel: History ─────────────────────────────────────── -->
+        <div id="panel-history" class="panel">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-white">My History</h2>
+                <p class="text-indigo-200 mt-1">All your points earned and deducted</p>
+            </div>
+            <div class="glass-card rounded-2xl p-6 neu-shadow">
+                <div id="history-list" class="space-y-3 max-h-[70vh] overflow-y-auto">
+                    <p class="text-gray-400 text-center py-12">No activity yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Panel: Cash-Outs ───────────────────────────────────── -->
+        <div id="panel-cashouts" class="panel">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-white">My Cash-Outs</h2>
+                <p class="text-indigo-200 mt-1">Points you've redeemed for rewards</p>
+            </div>
+            <div class="glass-card rounded-2xl p-6 neu-shadow">
+                <div id="cashouts-list" class="space-y-3 max-h-[70vh] overflow-y-auto">
+                    <p class="text-gray-400 text-center py-12">No cash-outs yet.</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>window._configMissing = false;</script>
+    <script src="firebase-config.js" onerror="window._configMissing=true"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <script>
+        // ── Auth guard ────────────────────────────────────────────────
+        var session = null;
+        try { session = JSON.parse(sessionStorage.getItem('childSession') || 'null'); } catch(e){}
+        if (!session || session.role !== 'child') { window.location.href = 'index.html'; }
+
+        if (window._configMissing || typeof FIREBASE_CONFIG === 'undefined') {
+            window.location.href = 'index.html';
+        } else {
+            firebase.initializeApp(FIREBASE_CONFIG);
+            var db = firebase.firestore();
+            var FieldValue = firebase.firestore.FieldValue;
+
+            // ── Session data ───────────────────────────────────────────
+            var familyId    = session.familyId;
+            var childId     = session.childId;
+            var childName   = session.childName;
+            var childAvatar = session.childAvatar || '😊';
+            var childColor  = session.childColor  || '#667eea';
+
+            // UI: Sidebar
+            var sidebarAv = document.getElementById('child-avatar-sidebar');
+            if (childAvatar.startsWith('data:')) {
+                sidebarAv.innerHTML = '<img src="' + childAvatar + '" class="w-full h-full object-cover">';
+            } else {
+                sidebarAv.textContent = childAvatar;
+            }
+            document.getElementById('child-name-sidebar').textContent   = childName;
+
+            // In-memory caches
+            var allActivities = [];
+            var allCashouts   = [];
+            var choresArr     = [];
+            var selectedChoreId = null;
+
+            // ── Firestore listeners ────────────────────────────────────
+            var base = db.collection('families').doc(familyId);
+
+            // Real-time balance from child doc
+            base.collection('children').doc(childId).onSnapshot(function(snap) {
+                if (!snap.exists) return;
+                var data = snap.data();
+                var pts  = data.points || 0;
+                var tot  = data.totalEarned || 0;
+                document.getElementById('balance-points').textContent = pts;
+                document.getElementById('balance-points').style.color  = pts < 0 ? '#ef4444' : childColor;
+                document.getElementById('balance-cash').textContent    = '$' + (pts * 0.1).toFixed(2);
+                document.getElementById('balance-total').textContent   = tot;
+            });
+
+            // All activities (filtered client-side by childId)
+            base.collection('activities').orderBy('timestamp','desc').limit(200).onSnapshot(function(snap) {
+                allActivities = [];
+                snap.forEach(function(d) {
+                    var a = Object.assign({id:d.id}, d.data());
+                    if (a.childId === childId) allActivities.push(a);
+                });
+                renderHistory();
+                renderBalanceRecent();
+            });
+
+            // All cashouts (filtered client-side)
+            base.collection('cashouts').orderBy('timestamp','desc').limit(100).onSnapshot(function(snap) {
+                allCashouts = [];
+                snap.forEach(function(d) {
+                    var c = Object.assign({id:d.id}, d.data());
+                    if (c.childId === childId) allCashouts.push(c);
+                });
+                renderCashouts();
+            });
+
+            // Load chore catalog (active only, one-time load + listen)
+            base.collection('chores').where('active','==',true).onSnapshot(function(snap) {
+                choresArr = [];
+                snap.forEach(function(d) { choresArr.push(Object.assign({id:d.id}, d.data())); });
+                renderChoreGrid();
+            });
+
+            // ── Render: Balance Recent ─────────────────────────────────
+            function renderBalanceRecent() {
+                renderActivityList('balance-recent', allActivities.slice(0, 10));
+            }
+
+            // ── Render: History ────────────────────────────────────────
+            function renderHistory() {
+                renderActivityList('history-list', allActivities);
+            }
+
+            function renderActivityList(elId, items) {
+                var list = document.getElementById(elId);
+                if (items.length === 0) {
+                    list.innerHTML = '<p class="text-gray-400 text-center py-8">Nothing here yet.</p>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < items.length; i++) {
+                    var a = items[i];
+                    var icon, bg, colorClass, sign;
+                    if (a.type === 'add' || a.type === 'request_approved') {
+                        icon='fa-arrow-up text-green-500'; bg='bg-green-50'; colorClass='text-green-600'; sign='+';
+                    } else if (a.type === 'remove') {
+                        icon='fa-arrow-down text-red-500'; bg='bg-red-50'; colorClass='text-red-500'; sign='-';
+                    } else {
+                        icon='fa-money-bill-wave text-indigo-500'; bg='bg-indigo-50'; colorClass='text-indigo-600'; sign='-';
+                    }
+                    var ts = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate().toLocaleString() : a.timestamp) : '';
+                    html += '<div class="flex items-center gap-3 p-3 ' + bg + ' rounded-xl">';
+                    html += '<div class="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm"><i class="fas ' + icon + ' text-sm"></i></div>';
+                    html += '<div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-700 truncate">' + escHtml(a.description||'') + '</p>';
+                    html += '<p class="text-xs text-gray-400">' + ts + '</p></div>';
+                    html += '<span class="text-sm font-bold ' + colorClass + ' shrink-0">' + sign + (a.amount||0) + ' pts</span>';
+                    html += '</div>';
+                }
+                list.innerHTML = html;
+            }
+
+            // ── Render: Cash-Outs ──────────────────────────────────────
+            function renderCashouts() {
+                var list = document.getElementById('cashouts-list');
+                if (allCashouts.length === 0) {
+                    list.innerHTML = '<p class="text-gray-400 text-center py-12">No cash-outs yet.</p>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < allCashouts.length; i++) {
+                    var c = allCashouts[i];
+                    var ts = c.timestamp ? (c.timestamp.toDate ? c.timestamp.toDate().toLocaleString() : c.timestamp) : '';
+                    html += '<div class="flex items-center gap-3 p-4 bg-purple-50 rounded-xl">';
+                    html += '<div class="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm text-purple-500"><i class="fas fa-dollar-sign"></i></div>';
+                    html += '<div class="flex-1 min-w-0">';
+                    html += '<p class="font-semibold text-gray-800">' + (c.amount||0) + ' points → $' + ((c.amount||0)*0.1).toFixed(2) + '</p>';
+                    html += '<p class="text-xs text-gray-400">' + ts + (c.reason ? ' — ' + escHtml(c.reason) : '') + '</p>';
+                    html += '</div></div>';
+                }
+                list.innerHTML = html;
+            }
+
+            // ── Render: Chore Grid ─────────────────────────────────────
+            function renderChoreGrid() {
+                var grid = document.getElementById('chore-grid');
+                if (choresArr.length === 0) {
+                    grid.innerHTML = '<p class="text-gray-400 text-sm col-span-2 py-2">No chores in the catalog yet — use the free-text area below.</p>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < choresArr.length; i++) {
+                    var c = choresArr[i];
+                    html += '<div class="chore-card glass-card rounded-2xl p-4 border-2 border-transparent" onclick="selectChore(\'' + c.id + '\',this,\'' + escAttr(c.name) + '\',' + c.points + ')">';
+                    html += '<p class="font-semibold text-gray-800 text-sm mb-2">' + escHtml(c.name) + '</p>';
+                    html += '<span class="chore-pts inline-block px-2.5 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full">' + c.points + ' pts</span>';
+                    html += '</div>';
+                }
+                grid.innerHTML = html;
+                // Re-apply selection highlight if already selected
+                if (selectedChoreId) {
+                    var el = grid.querySelector('[onclick*="\'' + selectedChoreId + '\'"]');
+                    if (el) el.classList.add('selected');
+                }
+            }
+
+            function selectChore(id, el, name, pts) {
+                document.querySelectorAll('.chore-card').forEach(function(c){ c.classList.remove('selected'); });
+                el.classList.add('selected');
+                selectedChoreId = id;
+                // Pre-fill form
+                document.getElementById('request-description').value = name;
+                document.getElementById('request-points').value = pts;
+            }
+
+            // ── Submit Request ─────────────────────────────────────────
+            async function submitRequest() {
+                var description = document.getElementById('request-description').value.trim();
+                var pts         = parseInt(document.getElementById('request-points').value) || 0;
+                document.getElementById('request-error').classList.add('hidden');
+                document.getElementById('request-success').classList.add('hidden');
+
+                if (!description) { showReqError('Please describe what you did.'); return; }
+                if (pts <= 0)     { showReqError('Please enter a valid number of points.'); return; }
+
+                var chore    = selectedChoreId ? choresArr.find(function(c){ return c.id===selectedChoreId; }) : null;
+                var choreName = chore ? chore.name : (description.length > 60 ? description.substring(0,60)+'…' : description);
+
+                document.getElementById('submit-request-btn').disabled = true;
+                document.getElementById('submit-request-btn').style.opacity = '0.65';
+                try {
+                    await base.collection('pointRequests').add({
+                        childId:         childId,
+                        childName:       childName,
+                        choreId:         selectedChoreId || null,
+                        choreName:       choreName,
+                        pointsRequested: pts,
+                        description:     description,
+                        status:          'pending',
+                        createdAt:       FieldValue.serverTimestamp()
+                    });
+                    // Reset form
+                    document.getElementById('request-description').value = '';
+                    document.getElementById('request-points').value = 10;
+                    document.querySelectorAll('.chore-card').forEach(function(c){ c.classList.remove('selected'); });
+                    selectedChoreId = null;
+                    document.getElementById('request-success').classList.remove('hidden');
+                    setTimeout(function(){ document.getElementById('request-success').classList.add('hidden'); }, 4000);
+                } catch(e) {
+                    showReqError('Could not send request. Please try again.');
+                }
+                document.getElementById('submit-request-btn').disabled = false;
+                document.getElementById('submit-request-btn').style.opacity = '1';
+            }
+
+            function showReqError(msg) {
+                var el = document.getElementById('request-error');
+                el.textContent = msg;
+                el.classList.remove('hidden');
+            }
+
+            // ── Logout ─────────────────────────────────────────────────
+            function doLogout() {
+                sessionStorage.removeItem('childSession');
+                window.location.href = 'index.html';
+            }
+        }
+
+        // ── Panel navigation ──────────────────────────────────────────
+        function showPanel(name) {
+            document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+            document.getElementById('panel-'+name).classList.add('active');
+            document.querySelectorAll('.sidebar-item').forEach(function(i){ i.classList.remove('active'); });
+            var nav = document.querySelector('[data-panel="'+name+'"]');
+            if (nav) nav.classList.add('active');
+        }
+
+        // ── Utilities ─────────────────────────────────────────────────
+        function escHtml(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+        function escAttr(s) { return escHtml(s); }
+    </script>
+</body>
+</html>
