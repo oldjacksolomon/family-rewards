@@ -225,6 +225,30 @@
                 </div>
 
                 <div class="glass-card rounded-2xl p-6 neu-shadow">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <i class="fas fa-user-plus text-purple-500"></i> Invite a Parent
+                    </h3>
+                    <p class="text-sm text-gray-500 mb-3">Generate a one-time code to invite another parent to manage this family.</p>
+                    <div id="invite-code-area" class="hidden mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="flex-1 bg-purple-50 border-2 border-purple-200 rounded-xl px-5 py-3 text-center">
+                                <p id="invite-code-display" class="text-2xl font-bold tracking-widest text-purple-700">—</p>
+                            </div>
+                            <button onclick="copyInviteCode()" class="px-4 py-3 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-xl transition-colors flex items-center gap-2 font-medium" title="Copy">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-400 text-center mt-2">Share this with the other parent. It can only be used once.</p>
+                        <p id="invite-copy-confirmation" class="hidden text-emerald-600 text-sm mt-1 text-center font-medium">Copied to clipboard!</p>
+                    </div>
+                    <button onclick="generateInviteCode()" id="gen-invite-btn" class="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2">
+                        <i class="fas fa-link"></i> Generate Invite Code
+                    </button>
+                    <div id="invite-error" class="hidden mt-3 bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm"></div>
+                    <div id="parents-list" class="mt-4"></div>
+                </div>
+
+                <div class="glass-card rounded-2xl p-6 neu-shadow">
                     <h3 class="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
                         <i class="fas fa-user text-indigo-500"></i> Account
                     </h3>
@@ -276,6 +300,7 @@
             var FieldValue = firebase.firestore.FieldValue;
 
             var currentUser = null;
+            var familyId    = null;
             var familyCode  = null;
 
             // In-memory caches updated by Firestore listeners
@@ -289,11 +314,25 @@
             var unsubs = [];
 
             // ── Auth guard ─────────────────────────────────────────────
-            auth.onAuthStateChanged(function(user) {
+            auth.onAuthStateChanged(async function(user) {
                 if (!user) { window.location.href = 'index.html'; return; }
                 currentUser = user;
                 document.getElementById('settings-parent-email').textContent = user.email;
-                loadFamilyAndListen(user.uid);
+
+                // Resolve familyId: creator's own doc, or lookup via parentFamilyMap
+                var famDoc = await db.collection('families').doc(user.uid).get();
+                if (famDoc.exists) {
+                    familyId = user.uid;
+                } else {
+                    var mapDoc = await db.collection('parentFamilyMap').doc(user.uid).get();
+                    if (mapDoc.exists) {
+                        familyId = mapDoc.data().familyId;
+                    } else {
+                        window.location.href = 'index.html';
+                        return;
+                    }
+                }
+                loadFamilyAndListen(familyId);
             });
 
             function loadFamilyAndListen(uid) {
@@ -304,6 +343,13 @@
                     var parentName = data.parentName || (currentUser.displayName) || 'Parent';
                     document.getElementById('sidebar-parent-name').textContent  = parentName;
                     document.getElementById('settings-parent-name').textContent = parentName;
+
+                    // Lazy migration: add parentUids if missing
+                    if (doc.exists && !data.parentUids) {
+                        db.collection('families').doc(uid).update({
+                            parentUids: [uid]
+                        });
+                    }
 
                     // Family display name — default to surname
                     var parts = parentName.trim().split(/\s+/);
@@ -321,10 +367,20 @@
                         db.collection('families').doc(uid).set({
                             familyCode:  familyCode,
                             parentName:  parentName,
+                            parentUids:  [uid],
                             createdAt:   firebase.firestore.FieldValue.serverTimestamp()
                         }, { merge: true });
                     }
                     document.getElementById('family-code-display').textContent = familyCode;
+
+                    // Show existing invite code if present
+                    if (data.inviteCode) {
+                        document.getElementById('invite-code-display').textContent = data.inviteCode;
+                        document.getElementById('invite-code-area').classList.remove('hidden');
+                    }
+
+                    // Show parents list
+                    renderParentsList(data.parentUids);
                 });
 
                 // Real-time listeners
@@ -615,7 +671,7 @@
                     if (pin.length === 4) {
                         pinHash = await sha256(pin);
                     }
-                    await db.collection('families').doc(currentUser.uid).collection('children').add({
+                    await db.collection('families').doc(familyId).collection('children').add({
                         name:        name,
                         avatar:      avatar,
                         color:       color,
@@ -642,7 +698,7 @@
 
             var doRemoveChild = async function(id) {
                 try {
-                    await db.collection('families').doc(currentUser.uid).collection('children').doc(id).delete();
+                    await db.collection('families').doc(familyId).collection('children').doc(id).delete();
                     closeModal();
                 } catch(e) { alert('Error removing child: ' + e.message); }
             }
@@ -670,7 +726,7 @@
                 var avatar = document.getElementById('selectedAvatar').value;
                 if (!name) { showModalError('edit-child-error', 'Please enter a name.'); return; }
                 try {
-                    await db.collection('families').doc(currentUser.uid).collection('children').doc(childId).update({ name: name, avatar: avatar });
+                    await db.collection('families').doc(familyId).collection('children').doc(childId).update({ name: name, avatar: avatar });
                     closeModal();
                 } catch(e) { showModalError('edit-child-error', 'Error saving: ' + (e.message || e.code)); }
             };
@@ -714,7 +770,7 @@
                 if(pin.length<4){alert('Please enter all 4 digits.');return;}
                 try {
                     var h=await sha256(pin);
-                    await db.collection('families').doc(currentUser.uid).collection('children').doc(childId).update({pinHash:h});
+                    await db.collection('families').doc(familyId).collection('children').doc(childId).update({pinHash:h});
                     closeModal();
                 } catch(e){alert('Error saving PIN: '+e.message);}
             }
@@ -749,9 +805,9 @@
                 var desc = escHtml(child.name) + ' earned ' + pts + ' points' + (reason ? ' for ' + reason : '');
                 try {
                     var batch = db.batch();
-                    var childRef = db.collection('families').doc(currentUser.uid).collection('children').doc(childId);
+                    var childRef = db.collection('families').doc(familyId).collection('children').doc(childId);
                     batch.update(childRef, { points: FieldValue.increment(pts), totalEarned: FieldValue.increment(pts) });
-                    var actRef = db.collection('families').doc(currentUser.uid).collection('activities').doc();
+                    var actRef = db.collection('families').doc(familyId).collection('activities').doc();
                     batch.set(actRef, { type:'add', childId:childId, childName:child.name, amount:pts, description:desc, timestamp:FieldValue.serverTimestamp() });
                     await batch.commit();
                     closeModal();
@@ -782,9 +838,9 @@
                 var desc = escHtml(child.name) + ' lost ' + pts + ' points' + (reason ? ' — ' + reason : '');
                 try {
                     var batch = db.batch();
-                    var childRef = db.collection('families').doc(currentUser.uid).collection('children').doc(childId);
+                    var childRef = db.collection('families').doc(familyId).collection('children').doc(childId);
                     batch.update(childRef, { points: FieldValue.increment(-pts) });
-                    var actRef = db.collection('families').doc(currentUser.uid).collection('activities').doc();
+                    var actRef = db.collection('families').doc(familyId).collection('activities').doc();
                     batch.set(actRef, { type:'remove', childId:childId, childName:child.name, amount:pts, description:desc, timestamp:FieldValue.serverTimestamp() });
                     await batch.commit();
                     closeModal();
@@ -836,9 +892,9 @@
                 var desc    = escHtml(child.name) + ' cashed out ' + pts + ' points ($' + cashVal + ')' + (reason ? ' — ' + reason : '');
                 try {
                     var batch    = db.batch();
-                    var childRef = db.collection('families').doc(currentUser.uid).collection('children').doc(childId);
-                    var coRef    = db.collection('families').doc(currentUser.uid).collection('cashouts').doc();
-                    var actRef   = db.collection('families').doc(currentUser.uid).collection('activities').doc();
+                    var childRef = db.collection('families').doc(familyId).collection('children').doc(childId);
+                    var coRef    = db.collection('families').doc(familyId).collection('cashouts').doc();
+                    var actRef   = db.collection('families').doc(familyId).collection('activities').doc();
                     batch.update(childRef, { points: FieldValue.increment(-pts) });
                     batch.set(coRef,  { childId:childId, childName:child.name, amount:pts, cashValue:cashVal, reason:reason, timestamp:FieldValue.serverTimestamp() });
                     batch.set(actRef, { type:'cashout', childId:childId, childName:child.name, amount:pts, description:desc, timestamp:FieldValue.serverTimestamp() });
@@ -854,9 +910,9 @@
                 var desc = escHtml(child.name) + ' earned ' + pts + ' points for ' + choreName + ' (approved request)';
                 try {
                     var batch    = db.batch();
-                    var reqRef   = db.collection('families').doc(currentUser.uid).collection('pointRequests').doc(reqId);
-                    var childRef = db.collection('families').doc(currentUser.uid).collection('children').doc(childId);
-                    var actRef   = db.collection('families').doc(currentUser.uid).collection('activities').doc();
+                    var reqRef   = db.collection('families').doc(familyId).collection('pointRequests').doc(reqId);
+                    var childRef = db.collection('families').doc(familyId).collection('children').doc(childId);
+                    var actRef   = db.collection('families').doc(familyId).collection('activities').doc();
                     batch.update(reqRef,   { status:'approved', reviewedAt:FieldValue.serverTimestamp() });
                     batch.update(childRef, { points:FieldValue.increment(pts), totalEarned:FieldValue.increment(pts) });
                     batch.set(actRef, { type:'request_approved', childId:childId, childName:child.name, amount:pts, description:desc, timestamp:FieldValue.serverTimestamp() });
@@ -866,7 +922,7 @@
 
             var rejectRequest = async function(reqId) {
                 try {
-                    await db.collection('families').doc(currentUser.uid).collection('pointRequests').doc(reqId)
+                    await db.collection('families').doc(familyId).collection('pointRequests').doc(reqId)
                         .update({ status:'rejected', reviewedAt:FieldValue.serverTimestamp() });
                 } catch(e) { alert('Error rejecting request: ' + e.message); }
             }
@@ -895,7 +951,7 @@
                 var pts  = parseInt(document.getElementById('chorePointsInput').value);
                 if (!name) { alert('Please enter a chore name'); return; }
                 if (!pts || pts <= 0) { alert('Please enter a valid point value'); return; }
-                var base = db.collection('families').doc(currentUser.uid).collection('chores');
+                var base = db.collection('families').doc(familyId).collection('chores');
                 try {
                     if (editId) {
                         await base.doc(editId).update({ name:name, points:pts });
@@ -908,7 +964,7 @@
 
             var toggleChore = async function(id, newActive) {
                 try {
-                    await db.collection('families').doc(currentUser.uid).collection('chores').doc(id).update({ active:newActive });
+                    await db.collection('families').doc(familyId).collection('chores').doc(id).update({ active:newActive });
                 } catch(e) { alert('Error: ' + e.message); }
             }
 
@@ -917,7 +973,7 @@
                 if (!chore) return;
                 if (!confirm('Delete "' + chore.name + '" from the catalog?')) return;
                 try {
-                    await db.collection('families').doc(currentUser.uid).collection('chores').doc(id).delete();
+                    await db.collection('families').doc(familyId).collection('chores').doc(id).delete();
                 } catch(e) { alert('Error: ' + e.message); }
             }
 
@@ -926,7 +982,7 @@
                 var name = document.getElementById('family-name-input').value.trim();
                 if (!name) return;
                 try {
-                    await db.collection('families').doc(currentUser.uid).update({ familyDisplayName: name });
+                    await db.collection('families').doc(familyId).update({ familyDisplayName: name });
                     document.getElementById('dashboard-family-name').textContent = name;
                     var msg = document.getElementById('family-name-saved');
                     msg.classList.remove('hidden');
@@ -946,6 +1002,48 @@
             function doSignOut() {
                 unsubs.forEach(function(u){ try{u();}catch(e){} });
                 auth.signOut().then(function(){ window.location.href='index.html'; });
+            }
+
+            // ── Invite a Parent ──────────────────────────────────────
+            var generateInviteCode = async function() {
+                var code = 'INV-' + Math.random().toString(36).substring(2,6).toUpperCase() +
+                           '-' + Math.random().toString(36).substring(2,6).toUpperCase();
+                var errEl = document.getElementById('invite-error');
+                errEl.classList.add('hidden');
+                try {
+                    await db.collection('parentInvites').doc(code).set({
+                        familyId:   familyId,
+                        familyName: document.getElementById('dashboard-family-name').textContent,
+                        createdBy:  currentUser.uid,
+                        createdAt:  FieldValue.serverTimestamp(),
+                        status:     'active',
+                        usedBy:     null,
+                        usedAt:     null
+                    });
+                    await db.collection('families').doc(familyId).update({ inviteCode: code });
+                    document.getElementById('invite-code-display').textContent = code;
+                    document.getElementById('invite-code-area').classList.remove('hidden');
+                } catch(e) {
+                    errEl.textContent = 'Error generating invite: ' + e.message;
+                    errEl.classList.remove('hidden');
+                }
+            };
+
+            function copyInviteCode() {
+                var code = document.getElementById('invite-code-display').textContent;
+                if (!code || code === '—') return;
+                navigator.clipboard.writeText(code).then(function() {
+                    var msg = document.getElementById('invite-copy-confirmation');
+                    msg.classList.remove('hidden');
+                    setTimeout(function(){ msg.classList.add('hidden'); }, 2000);
+                });
+            }
+
+            function renderParentsList(parentUids) {
+                var el = document.getElementById('parents-list');
+                if (!parentUids || parentUids.length <= 1) { el.innerHTML = ''; return; }
+                el.innerHTML = '<p class="text-sm font-medium text-gray-700 mb-1"><i class="fas fa-users text-purple-400 mr-1"></i> ' +
+                    parentUids.length + ' parent' + (parentUids.length > 1 ? 's' : '') + ' manage this family</p>';
             }
 
             // ── Export ─────────────────────────────────────────────────

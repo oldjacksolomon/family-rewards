@@ -183,6 +183,72 @@
         </div>
     </div>
 
+    <!-- ── View: Join or Create Family (shown after login if no family) ── -->
+    <div id="view-join-or-create" class="auth-view flex-col items-center w-full max-w-md">
+        <div class="glass-card rounded-2xl shadow-2xl p-8 w-full">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-home text-white"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800">Welcome!</h2>
+            </div>
+            <p class="text-gray-500 mb-6 text-sm">You're signed in but don't have a family yet. Create one or join an existing family.</p>
+            <div class="space-y-4">
+                <button onclick="showView('view-create-family')"
+                    class="w-full py-4 bg-gradient-to-r from-emerald-400 to-teal-500 text-white rounded-xl font-semibold text-lg hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-3">
+                    <i class="fas fa-plus-circle"></i> Create a New Family
+                </button>
+                <div class="relative py-1">
+                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-200"></div></div>
+                    <div class="relative text-center"><span class="bg-white px-3 text-sm text-gray-400">or</span></div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Have an invite code?</label>
+                    <input id="invite-code-input" type="text" placeholder="e.g. INV-A3K9-B7M2" maxlength="13"
+                        class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition-colors text-center text-lg font-bold tracking-widest uppercase"
+                        oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9-]/g,'')"
+                        onkeydown="if(event.key==='Enter')doJoinFamily()">
+                </div>
+                <div id="join-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm"></div>
+                <button onclick="doJoinFamily()" id="join-btn"
+                    class="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-3">
+                    <i class="fas fa-user-plus"></i> Join Family
+                </button>
+            </div>
+            <button onclick="doSignOut()" class="w-full mt-4 py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors">
+                <i class="fas fa-sign-out-alt"></i> Sign Out
+            </button>
+        </div>
+    </div>
+
+    <!-- ── View: Create Family (post-login, for users without a family) ── -->
+    <div id="view-create-family" class="auth-view flex-col items-center w-full max-w-md">
+        <div class="glass-card rounded-2xl shadow-2xl p-8 w-full">
+            <button onclick="showView('view-join-or-create')" class="text-gray-400 hover:text-gray-600 mb-6 flex items-center gap-2 text-sm transition-colors">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-home text-white"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800">Create Your Family</h2>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
+                    <input id="create-family-name" type="text" placeholder="e.g. Bob Grim"
+                        class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors">
+                    <p class="text-xs text-gray-400 mt-1">Used to generate your Family Code</p>
+                </div>
+                <div id="create-family-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm"></div>
+                <button onclick="doCreateFamily()" id="create-family-btn"
+                    class="w-full py-3 bg-gradient-to-r from-emerald-400 to-teal-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200">
+                    Create Family
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ── View: Child Login ──────────────────────────────────────────── -->
     <div id="view-child-login" class="auth-view flex-col items-center w-full max-w-md">
         <div class="glass-card rounded-2xl shadow-2xl p-8 w-full">
@@ -270,8 +336,23 @@
             if (sessionStorage.getItem('childSession')) {
                 window.location.href = 'child.html';
             } else {
-                auth.onAuthStateChanged(function(user) {
-                    if (user) window.location.href = 'parent.html';
+                auth.onAuthStateChanged(async function(user) {
+                    if (!user) { showView('view-landing'); return; }
+                    // Check if user is a family creator
+                    var famDoc = await db.collection('families').doc(user.uid).get();
+                    if (famDoc.exists) {
+                        window.location.href = 'parent.html';
+                        return;
+                    }
+                    // Check if user is an invited parent
+                    var mapDoc = await db.collection('parentFamilyMap').doc(user.uid).get();
+                    if (mapDoc.exists) {
+                        window.location.href = 'parent.html';
+                        return;
+                    }
+                    // No family — show join-or-create view
+                    window._pendingUser = user;
+                    showView('view-join-or-create');
                 });
                 showView('view-landing');
             }
@@ -400,9 +481,10 @@
                 var familyCode = await generateUniqueCode(name);
                 var cred = await auth.createUserWithEmailAndPassword(email, password);
                 await db.collection('families').doc(cred.user.uid).set({
-                    familyCode: familyCode,
-                    parentName: name,
-                    createdAt:  firebase.firestore.FieldValue.serverTimestamp()
+                    familyCode:  familyCode,
+                    parentName:  name,
+                    parentUids:  [cred.user.uid],
+                    createdAt:   firebase.firestore.FieldValue.serverTimestamp()
                 });
                 // onAuthStateChanged handles redirect to parent.html
             } catch(e) {
@@ -429,9 +511,15 @@
                     var name       = user.displayName || 'Parent';
                     var familyCode = await generateUniqueCode(name);
                     await db.collection('families').doc(user.uid).set({
-                        familyCode: familyCode,
-                        parentName: name,
-                        createdAt:  firebase.firestore.FieldValue.serverTimestamp()
+                        familyCode:  familyCode,
+                        parentName:  name,
+                        parentUids:  [user.uid],
+                        createdAt:   firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } else if (!familyDoc.data().parentUids) {
+                    // Lazy migration: add parentUids for existing families
+                    await db.collection('families').doc(user.uid).update({
+                        parentUids: [user.uid]
                     });
                 }
                 // onAuthStateChanged handles redirect to parent.html
@@ -540,6 +628,75 @@
             if (e.key==='Backspace' && !document.getElementById(ids[i]).value && i>0)
                 document.getElementById(ids[i-1]).focus();
             if (e.key==='Enter') doChildLogin();
+        }
+
+        // ── Join Family (invited parent enters invite code) ─────────
+        async function doJoinFamily() {
+            var code = document.getElementById('invite-code-input').value.trim().toUpperCase();
+            hideError('join-error');
+            if (code.length < 6) { showError('join-error','Please enter a valid invite code.'); return; }
+            var user = auth.currentUser;
+            if (!user) { showError('join-error','You must be signed in.'); return; }
+            setLoading('join-btn', true);
+            try {
+                var inviteDoc = await db.collection('parentInvites').doc(code).get();
+                if (!inviteDoc.exists || inviteDoc.data().status !== 'active') {
+                    showError('join-error','Invalid or expired invite code.');
+                    setLoading('join-btn', false);
+                    return;
+                }
+                var invData  = inviteDoc.data();
+                var familyId = invData.familyId;
+                var batch = db.batch();
+                // Add self to family's parentUids
+                batch.update(db.collection('families').doc(familyId), {
+                    parentUids: firebase.firestore.FieldValue.arrayUnion(user.uid)
+                });
+                // Create mapping doc
+                batch.set(db.collection('parentFamilyMap').doc(user.uid), {
+                    familyId: familyId,
+                    joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                // Mark invite as used
+                batch.update(db.collection('parentInvites').doc(code), {
+                    status: 'used',
+                    usedBy: user.uid,
+                    usedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                await batch.commit();
+                window.location.href = 'parent.html';
+            } catch(e) {
+                showError('join-error', 'Error joining family: ' + e.message);
+                setLoading('join-btn', false);
+            }
+        }
+
+        // ── Create Family (post-login, for users who signed in but have no family) ──
+        async function doCreateFamily() {
+            var name = document.getElementById('create-family-name').value.trim();
+            hideError('create-family-error');
+            if (!name) { showError('create-family-error','Please enter your name.'); return; }
+            var user = auth.currentUser;
+            if (!user) { showError('create-family-error','You must be signed in.'); return; }
+            setLoading('create-family-btn', true);
+            try {
+                var familyCode = await generateUniqueCode(name);
+                await db.collection('families').doc(user.uid).set({
+                    familyCode:  familyCode,
+                    parentName:  name,
+                    parentUids:  [user.uid],
+                    createdAt:   firebase.firestore.FieldValue.serverTimestamp()
+                });
+                window.location.href = 'parent.html';
+            } catch(e) {
+                showError('create-family-error', 'Error creating family: ' + e.message);
+                setLoading('create-family-btn', false);
+            }
+        }
+
+        // ── Sign Out ────────────────────────────────────────────────────
+        function doSignOut() {
+            auth.signOut().then(function() { showView('view-landing'); });
         }
 
         async function doChildLogin() {
