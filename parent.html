@@ -54,8 +54,16 @@
 </head>
 <body class="flex">
 
+    <!-- ── Mobile hamburger ──────────────────────────────────────────── -->
+    <button id="hamburger" onclick="toggleSidebar()" class="md:hidden fixed top-4 left-4 z-30 w-10 h-10 bg-indigo-900 text-white rounded-xl flex items-center justify-center shadow-lg">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- ── Sidebar overlay (mobile) ───────────────────────────────── -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/50 z-20 md:hidden"></div>
+
     <!-- ── Sidebar ─────────────────────────────────────────────────── -->
-    <aside class="w-64 min-h-screen bg-gradient-to-b from-indigo-900 to-purple-900 text-white p-6 flex flex-col fixed left-0 top-0 bottom-0 z-10">
+    <aside id="sidebar" class="w-64 min-h-screen bg-gradient-to-b from-indigo-900 to-purple-900 text-white p-6 flex flex-col fixed left-0 top-0 bottom-0 z-30 transition-transform duration-300 -translate-x-full md:translate-x-0">
         <div class="flex items-center gap-3 mb-10">
             <div class="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl flex items-center justify-center">
                 <i class="fas fa-star text-white"></i>
@@ -96,7 +104,7 @@
     </aside>
 
     <!-- ── Main ────────────────────────────────────────────────────── -->
-    <main class="ml-64 flex-1 p-8">
+    <main class="ml-0 md:ml-64 flex-1 p-4 pt-16 md:p-8">
 
         <!-- ── Panel: Dashboard ──────────────────────────────────── -->
         <div id="panel-dashboard" class="panel active">
@@ -1132,6 +1140,21 @@
             document.querySelectorAll('.sidebar-item').forEach(function(i){ i.classList.remove('active'); });
             var nav=document.querySelector('[data-panel="'+name+'"]');
             if(nav) nav.classList.add('active');
+            // Auto-close sidebar on mobile after nav tap
+            if (window.innerWidth < 768) toggleSidebar(true);
+        }
+
+        function toggleSidebar(forceClose) {
+            var sb = document.getElementById('sidebar');
+            var ov = document.getElementById('sidebar-overlay');
+            var open = !sb.classList.contains('-translate-x-full');
+            if (forceClose || open) {
+                sb.classList.add('-translate-x-full');
+                ov.classList.add('hidden');
+            } else {
+                sb.classList.remove('-translate-x-full');
+                ov.classList.remove('hidden');
+            }
         }
     </script>
 </body>
